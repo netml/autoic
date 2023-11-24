@@ -243,12 +243,13 @@ def remove_empty_fields_from_csv_files(csv_file_paths):
     columns_to_remove = set()
 
     # Check if each common column has only one unique value across all DataFrames
-    for idx, col in enumerate(common_columns):
+    for col in common_columns:
         common_values = set(dfs[0][col].unique())
         for df in dfs[1:]:
             common_values &= set(df[col].unique())
         if len(common_values) == 1:
-            if idx < len(common_columns) - 1: # ignore the label being removed
+            # Ensure we're not looking at the last column of each DataFrame
+            if col != dfs[0].columns[-1]:  # Check against the last column name, do not remove the label even if it has a single unique value
                 columns_to_remove.add(col)
 
     if columns_to_remove:
@@ -385,6 +386,7 @@ if __name__ == '__main__':
     protocol = ""
     tshark_filter = ""
     run_number = 0
+    batch_number = 0
     num_cores = multiprocessing.cpu_count() - 1 # Determine the number of CPU cores minus 1
     statistical_features_on = False
 
@@ -424,7 +426,18 @@ if __name__ == '__main__':
                 print("Missing value for -b/--batch option")
                 sys.exit(1)
             
-            order_of_batches = list(map(int, sys.argv[index + 1].split(',')))
+            batch_number = int(sys.argv[index + 1])
+
+            if batch_number == 1:
+                order_of_batches = [1, 2, 3]
+            elif batch_number == 2:
+                order_of_batches = [1, 3, 2]
+            elif batch_number == 3:
+                order_of_batches = [2, 3, 1]
+            else:
+                print("Invalid batch number")
+                sys.exit(1)
+
             index += 2  # Skip both the option and its value
         elif sys.argv[index] in ('-i', '--iteration'):
             if index + 1 >= len(sys.argv):
@@ -508,13 +521,6 @@ if __name__ == '__main__':
 
     # Set parameters and perform validation checks
     if log_file_path == "":
-        batch_number = 0
-        if order_of_batches == [1,2,3] or order_of_batches == [2,1,3]:
-            batch_number = 1
-        elif order_of_batches == [1,3,2] or order_of_batches == [3,1,2]:
-            batch_number = 2
-        elif order_of_batches == [2,3,1] or order_of_batches == [3,2,1]:
-            batch_number = 3
         log_file_path = (
             "packets_" + str(num_of_packets_to_process) +
             "_mode_" + str(mode) +
