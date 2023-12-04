@@ -8,6 +8,7 @@ from sklearn.linear_model import LogisticRegression
 from libraries import log
 from wittgenstein import RIPPER
 from sklearn.naive_bayes import GaussianNB
+from collections import defaultdict
 import multiprocessing
 import pandas as pd
 import subprocess
@@ -112,12 +113,12 @@ def print_usage():
     Note: Replace <placeholders> with actual values without the angle brackets.
     """)
 
-def is_numeric(input_string):
+def is_numeric(token):
     try:
-        float(input_string) # Attempt to convert the input string to a float
-        return True  # Return True if successful
+        float(token)
+        return True
     except ValueError:
-        return False  # Return False if ValueError is raised (not numeric)
+        return False
 
 def is_hexadecimal(s):
     return bool(re.match(r"^[0-9A-Fa-f]+$", s))
@@ -128,53 +129,32 @@ def calculate_list_average(lst):
 def fix_trailing_character(input_string):
     return input_string.rstrip('/') + '/'  # Remove trailing '/' and add it back
 
-def remove_duplicates_rows(csv_data):
-    seen = set()
-    unique_csv_data = []
-
-    for sublist in csv_data:
-        tuple_sublist = tuple(sublist)
-
-        if tuple_sublist not in seen:
-            unique_csv_data.append(sublist)
-            seen.add(tuple_sublist)
-
-    return unique_csv_data
-
-def remove_rows_with_nan_values(csv_data):
-    return [list(row) for row in csv_data if not all(entry == "" for entry in row[:-1])]  # Filter rows with non-empty entries
-
 def remove_symbols(s):
     return re.sub(r'[^a-zA-Z0-9]', '', s)
 
-def modify_dataset(csv_data):
-    for i in range(len(csv_data)): # Iterate through rows of the dataset
-        for j in range(len(csv_data[i]) - 1): # Iterate through columns of each row except the label
-            cell = csv_data[i][j]
+def modify_dataset(fields):
+    for j, cell in enumerate(fields):
+        if cell:
+            tokens = cell.split(',')
+            total = sum(convert_token(token) for token in tokens)
+            fields[j] = str(total % 0xFFFFFFFF)
+        else:
+            fields[j] = '-1'
+    return fields
 
-            if len(cell) == 0: # If the cell is empty, replace it with '-1'
-                csv_data[i][j] = '-1'
-            else:
-                tokens = cell.split(',')
-                total = 0
+def convert_token(token):
+    token = token.strip()
 
-                # Loop through tokens in the cell
-                for token in tokens:
-                    token = remove_symbols(token) # cleanup symbols
-                    if bool(re.match(r'^0x[0-9a-fA-F]+$', token)):  # Check if the token is hexadecimal
-                        # Convert hexadecimal to decimal
-                        decimal_value = int(token, 16)
-                        token = str(decimal_value)
-                    elif not is_numeric(token):  # Check if the token is alphanumeric
-                        # Calculate the hash value using the hash() function
-                        decimal_hash = hash(token)
-                        token = str(decimal_hash)
-                    
-                     # Sum up the numeric values after potential conversions
-                    total += float(token)
-                
-                # Replace the cell value with the remainder modulo a large constant
-                csv_data[i][j] = str(total % 0xFFFFFFFF)
+    if re.match(r'^0x[0-9a-fA-F]+$', token):
+        return int(token, 16)
+    elif not is_numeric(token):
+        return hash(token)
+    else:
+        return float(token)
+
+def write_line_to_csv(csv_file_paths, fields, class_counter):
+    with open(csv_file_paths[class_counter % len(csv_file_paths)], 'a') as file:
+        file.write(','.join(fields) + '\n')
 
 def read_blacklisted_features(blacklist_file_path):
     try:
@@ -286,7 +266,42 @@ def write_packets_to_csv_files(csv_file_paths, num_of_lines_per_file, csv_data):
                 csv_line = ','.join(line)
                 f.write(f"{csv_line}\n")
 
-def extract_features_from_pcap(blacklist_file_path, feature_names_file_path, protocol_folder_path, csv_file_paths, pcap_file_names, pcap_file_paths, classes_file_path, selected_field_list_file_path, statistical_features_on, tshark_filter):
+def split_file_into_thirds(filename, csv_file_paths):
+    # Count the number of lines in the file
+    with open(filename, 'r') as file:
+        line_count = sum(1 for _ in file)
+
+    # Calculate the number of lines per split file
+    lines_per_file = line_count // 3
+
+    # Open the original file again to split its contents
+    with open(filename, 'r') as file:
+        for i in range(1, 4):
+            with open(csv_file_paths[i-1], 'a') as outfile:
+                for _ in range(lines_per_file + (1 if i <= line_count % 3 else 0)):
+                    line = file.readline()
+                    # Stop if the file ends before expected
+                    if not line:
+                        break
+                    outfile.write(line)
+
+def remove_duplicates_in_place(file_path):
+    seen = set()
+    unique_lines = []
+
+    # Read unique lines
+    with open(file_path, 'r') as file:
+        for line in file:
+            if line not in seen:
+                unique_lines.append(line)
+                seen.add(line)
+
+    # Overwrite the file with unique lines
+    with open(file_path, 'w') as file:
+        for line in unique_lines:
+            file.write(line)
+
+def extract_features_from_pcap(blacklist_file_path, feature_names_file_path, protocol_folder_path, csv_file_paths, pcap_file_names, pcap_file_paths, classes_file_path, selected_field_list_file_path, statistical_features_on, tshark_filter, all_csv_file_path):
     # Create protocol folder
     if not os.path.exists(protocol_folder_path):
         os.makedirs(protocol_folder_path)
@@ -305,47 +320,38 @@ def extract_features_from_pcap(blacklist_file_path, feature_names_file_path, pro
     class_counter = 0
 
     # Loop through each pcap file in the provided folder
-    for index in range(len(pcap_file_names)):
-        pcap_file_name = pcap_file_names[index]
+    for pcap_file_name in pcap_file_names:
         class_name = pcap_file_name.split('.pcap')[0]
         list_of_classes[class_counter] = class_name
-        pcap_file_path = pcap_file_paths[index]
+        pcap_file_path = pcap_file_paths[class_counter]
 
         print("processing " + pcap_file_name + "...")
 
-        # Prepare the tshark command to be executed
+        # Prepare the tshark command
         tshark_cmd = ['tshark', '-n', '-r', pcap_file_path, '-T', 'fields']
-        if (tshark_filter != ""):
-            tshark_cmd.append('-Y')
-            tshark_cmd.append(tshark_filter)
+        if tshark_filter:
+            tshark_cmd.extend(['-Y', tshark_filter])
         for feature in csv_header[:-1]:
-            tshark_cmd.append('-e')
-            tshark_cmd.append(feature)
+            tshark_cmd.extend(['-e', feature])
+        tshark_cmd.extend(['-E', 'separator=/t'])
 
-        # Call tshark to extract the specified features from the pcap file
-        tshark_output = subprocess.check_output(tshark_cmd, universal_newlines=True)
-
-        # Parse tshark output and write to CSV file
-        csv_data = [line.split('\t') + [str(class_counter)] for line in tshark_output.strip().split('\n') if len(line.split('\t')) == len(csv_header) - 1]
-
-        del tshark_output
-
-        # Remove rows where the 'label' column is 'NaN'
-        csv_data = remove_rows_with_nan_values(csv_data)
-
-        # Remove duplicates
-        csv_data = remove_duplicates_rows(csv_data)
-
-        # Modify dataset
-        modify_dataset(csv_data)
-
-        # Calculate the number of lines per file
-        num_of_lines_per_file = len(csv_data) // 3
-
-        # Write the packets to CSV file
-        write_packets_to_csv_files(csv_file_paths, num_of_lines_per_file, csv_data)
+        # Process tshark output line by line
+        with open(all_csv_file_path, 'w') as file:
+            with subprocess.Popen(tshark_cmd, stdout=subprocess.PIPE, text=True) as proc:
+                for line in proc.stdout:
+                    fields = line.split('\t')
+                    if len(fields) == len(csv_header) - 1:
+                        if not all(entry == "" for entry in fields):  # Filter NaN values
+                            fields = modify_dataset(fields)
+                            fields.append(str(class_counter))
+                            file.write(','.join(fields) + '\n')
+        remove_duplicates_in_place(all_csv_file_path)
+        split_file_into_thirds(all_csv_file_path, csv_file_paths)
 
         class_counter += 1
+
+    os.remove(all_csv_file_path)
+    
     print()
 
     # Write class list to file
@@ -400,8 +406,7 @@ if __name__ == '__main__':
         ("GNB", GaussianNB()),
         ("RIP", RIPPER()), # doesn't work with multi-class
         ("KNN", KNeighborsClassifier()),
-        ("LR", LogisticRegression(solver='saga', multi_class='ovr', max_iter=10000)),
-        ("NB", GaussianNB())
+        ("LR", LogisticRegression(solver='saga', multi_class='ovr', max_iter=10000))
     ]
 
     # Loop through command-line arguments starting from the second element
@@ -576,7 +581,8 @@ if __name__ == '__main__':
         extract_features_from_pcap(
             blacklist_file_path, feature_names_file_path, protocol_folder_path,
             csv_file_paths, pcap_file_names, pcap_file_paths, classes_file_path,
-            selected_field_list_file_path, statistical_features_on, tshark_filter
+            selected_field_list_file_path, statistical_features_on, tshark_filter,
+            f'{folder}{protocol}/all.csv'
         )
     elif mode == 'report':
         report.run(folder + protocol, classifiers, classifier_index)
