@@ -132,6 +132,7 @@ if __name__ == '__main__':
     batch_number = 0
     num_cores = multiprocessing.cpu_count() - 1 # Determine the number of CPU cores minus 1
     statistical_features_on = False
+    blacklist_check = True
 
     # List of classifiers to test
     classifiers = [
@@ -251,6 +252,9 @@ if __name__ == '__main__':
 
             classifier_index = sys.argv[index+1]
             index += 2  # Skip both the option and its value
+        elif sys.argv[index] in ('-nb', '--no-blacklist'):
+            blacklist_check = False
+            index += 1
         else:
             print(f"Unknown parameter! '{sys.argv[index]}'")
             sys.exit(1)
@@ -292,22 +296,23 @@ if __name__ == '__main__':
 
         pcap_file_paths = [folder + "pcap/" + file_name for file_name in pcap_file_names]
 
-        print("converting pcap files to csv format...\n")
+        print("converting pcap files to csv format...")
+
         extract.run(
-            blacklist_file_path, feature_names_file_path, protocol_folder_path,
+            blacklist_check, blacklist_file_path, feature_names_file_path, protocol_folder_path,
             csv_file_paths, pcap_file_names, pcap_file_paths, classes_file_path,
             selected_field_list_file_path, statistical_features_on, tshark_filter,
             f'{folder}{protocol}/all.csv'
         )
+
+        print("done...")
     elif mode == 'report':
-        # Set parameters and perform validation checks
         if classifier_index == "":
             print("Classifier index not given!")
             sys.exit(1)
 
         report.run(folder + protocol, classifiers, classifier_index)
     elif mode == 'ga' or mode == 'aco' or mode == 'abc':
-        # Set parameters and perform validation checks
         if classifier_index == "":
             print("Classifier index not given!")
             sys.exit(1)

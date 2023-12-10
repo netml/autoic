@@ -214,3 +214,12 @@ tls.quic.negotiated_version
 tls.quic.initial_version
 tls.handshake.cipherspec
 ip.dsfield.ce
+ssl.handshake.session_id
+ssl.handshake.session_id_hit
+ssl.handshake.session_id_length
+ssl.handshake.session_id_length.error
+ssl.handshake.extension.data
+ssl.handshake.extensions_server_name
+tcp.seq
+tcp.seq_raw
+tcp.nxtseq
