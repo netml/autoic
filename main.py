@@ -85,6 +85,10 @@ def print_usage():
                                     given protocol. 'GA', 'ACO', and 'ABC' modes run the
                                     respective algorithms. This option is required.
 
+    -nb, --no-blacklist             Disable blacklist check. This option does not require a value.
+                                    If specified, the tool will not check the blacklist file for
+                                    eliminating features. Blacklist check is enabled by default.
+
     -c, --classifier <index>        Specify the classifier index to use. The value should be a 
                                     valid index integer. This option is required. Possible
                                     values are:
@@ -271,11 +275,7 @@ if __name__ == '__main__':
 
     csv_file_paths = []
     classes_file_path = f'{folder}/{protocol}/classes.json'
-    selected_field_list_file_path = f'{folder}/{protocol}/fields.txt'
-    selected_field_list = []
-    if os.path.exists(selected_field_list_file_path):
-        with open(selected_field_list_file_path, 'r') as file:
-            selected_field_list = file.readline().strip().split(',')
+    extracted_field_list_file_path = f'{folder}/{protocol}/fields.txt'
 
     # Run the mode
     if mode == 'extract':
@@ -301,7 +301,7 @@ if __name__ == '__main__':
         extract.run(
             blacklist_check, blacklist_file_path, feature_names_file_path, protocol_folder_path,
             csv_file_paths, pcap_file_names, pcap_file_paths, classes_file_path,
-            selected_field_list_file_path, statistical_features_on, tshark_filter,
+            extracted_field_list_file_path, statistical_features_on, tshark_filter,
             f'{folder}{protocol}/all.csv'
         )
 
@@ -364,13 +364,19 @@ if __name__ == '__main__':
                     num_cores, classifiers
                 )
 
+            # Read the extracted field list
+            extracted_field_list = []
+            if os.path.exists(extracted_field_list_file_path):
+                with open(extracted_field_list_file_path, 'r') as file:
+                    extracted_field_list = [line.strip() for line in file.readlines()]
+
             # Print best solution and the features selected
             sol_str = ''.join(map(str, best_solution))
             log(f"Best Solution:\t[{sol_str}]\t[{sol_str.count('1')}/{len(sol_str)}]\tFitness: {best_fitness}", log_file_path)
             log("\nSelected features:", log_file_path)
             for i in range(len(best_solution)):
                 if best_solution[i] == 1:
-                    log(selected_field_list[i], log_file_path)
+                    log(extracted_field_list[i], log_file_path)
 
             # Print the classification result on test data using selected features
             log("", log_file_path)

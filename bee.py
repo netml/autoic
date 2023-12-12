@@ -78,7 +78,7 @@ def abc_feature_selection(population_size, solution_size, max_trials, num_cores,
     # Read header from fields file
     try:
         with open(fields_file_path, 'r') as file:
-            header = file.readline().strip().split(',') + ['label']
+            header = [line.strip() for line in file.readlines()] + ['label']
             packets_1.append(header)
             packets_2.append(header)
     except FileNotFoundError:

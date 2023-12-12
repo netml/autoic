@@ -34,7 +34,7 @@ def ant_colony_optimization(num_of_ants, num_of_iterations, pheromone_decay, phe
     # Read header from fields file
     try:
         with open(fields_file_path, 'r') as file:
-            header = file.readline().strip().split(',') + ['label']
+            header = [line.strip() for line in file.readlines()] + ['label']
             packets_1.append(header)
             packets_2.append(header)
     except FileNotFoundError:

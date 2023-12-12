@@ -50,7 +50,7 @@ def genetic_algorithm(pop_size, solution_size, mutation_rate, crossover_rate, tr
     # Read header from fields file
     try:
         with open(fields_file_path, 'r') as file:
-            header = file.readline().strip().split(',') + ['label']
+            header = [line.strip() for line in file.readlines()] + ['label']
             packets_1.append(header)
             packets_2.append(header)
     except FileNotFoundError:

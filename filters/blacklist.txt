@@ -219,7 +219,10 @@ ssl.handshake.session_id_hit
 ssl.handshake.session_id_length
 ssl.handshake.session_id_length.error
 ssl.handshake.extension.data
-ssl.handshake.extensions_server_name
 tcp.seq
 tcp.seq_raw
 tcp.nxtseq
+ssl.handshake.extensions_server_name
+ssl.handshake.extensions_server_name_len
+ssl.handshake.extensions_server_name_list_len
+ssl.handshake.extensions_server_name_type
