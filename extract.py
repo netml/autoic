@@ -1,25 +1,24 @@
+import hashlib
 from collections import defaultdict
 import tempfile
 import pandas as pd
 import subprocess
 import csv
 import sys
-import os
 import re
 import json
 import statistics
 import os
-import numpy as np
 
 def read_blacklisted_features(blacklist_check, blacklist_file_path):
-    if (blacklist_check):
+    if blacklist_check:
         try:
             with open(blacklist_file_path, 'r') as f:
                 return f.read().splitlines()
         except FileNotFoundError:
-            return [] # return empty list if file not found
+            return []  # return empty list if file not found
     else:
-        return [] # return empty list if blacklist_check is false
+        return []  # return empty list if blacklist_check is false
 
 def read_and_filter_feature_names(feature_names_file_path, blacklisted_features):
     try:
@@ -49,10 +48,10 @@ def add_stat_features_to_csv_file(file_path):
     stats = []
     for field in df.columns[:-1]:  # Exclude the last column (label)
         column_values = df[field].tolist()
-        stats.extend([min(column_values), max(column_values), statistics.mean(column_values), statistics.stdev(column_values), statistics.mode(column_values)])
+        stats.extend([min(column_values), max(column_values), statistics.mean(column_values),
+                      statistics.stdev(column_values), statistics.mode(column_values)])
 
-    csv_data = []
-    csv_data.append(new_header)
+    csv_data = [new_header]
 
     # Iterate through the DataFrame rows and append the list
     for index, row in df.iterrows():
@@ -67,14 +66,16 @@ def add_stat_features_to_csv_file(file_path):
             line = ','.join(map(str, inner_list))  # Convert inner list to a comma-separated string
             file.write(line + '\n')
 
-def remove_empty_fields_from_csv_file(csv_file_path, chunk_size=10000):
+def remove_empty_fields_from_csv_file(all_csv_file_path, chunk_size=10000):
     non_unique_columns = set()
     first_chunk = True
     label_column = None
+    no_of_columns = 0
 
-    for chunk in pd.read_csv(csv_file_path, chunksize=chunk_size, low_memory=False):
+    for chunk in pd.read_csv(all_csv_file_path, chunksize=chunk_size, low_memory=False):
         if first_chunk:
             # Initialize non_unique_columns for all columns except the label column
+            no_of_columns = chunk.columns.size
             label_column = chunk.columns[-1]
             for col in chunk.columns[:-1]:
                 if chunk[col].nunique() > 1:
@@ -85,33 +86,34 @@ def remove_empty_fields_from_csv_file(csv_file_path, chunk_size=10000):
                 if col not in non_unique_columns and chunk[col].nunique() > 1:
                     non_unique_columns.add(col)
 
-    # Add the label column back to the non_unique_columns set
-    non_unique_columns.add(label_column)
+    # Add the label column to the non_unique_columns set
+    ordered_columns = sorted(list(non_unique_columns))
+    ordered_columns.append(label_column)
 
-    if len(non_unique_columns) == 1:
+    if len(ordered_columns) == 1:
         print("all fields except the label column are redundant, skipping...")
         return
 
-    print(f"keeping {len(non_unique_columns) - 1} fields...")
+    print(f"keeping {len(ordered_columns) - 1}/{no_of_columns - 1} fields...")
 
     # Create a temporary file to store the filtered data
     temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False)
     temp_file_path = temp_file.name
 
+    # Flag to check if it's the first chunk
+    is_first_chunk = True
+
     # Process the CSV in chunks and write to the temporary file
-    for chunk in pd.read_csv(csv_file_path, chunksize=chunk_size, low_memory=False):
-        filtered_chunk = chunk[sorted(list(non_unique_columns))]
+    for chunk in pd.read_csv(all_csv_file_path, chunksize=chunk_size, low_memory=False):
+        filtered_chunk = chunk[ordered_columns]
+        filtered_chunk.to_csv(temp_file_path, mode='a', index=False, header=is_first_chunk)
+        if is_first_chunk:
+            is_first_chunk = False
 
-        # Reorder columns to ensure label column is at the end
-        ordered_columns = [col for col in filtered_chunk if col != label_column] + [label_column]
-        filtered_chunk = filtered_chunk[ordered_columns]
-
-        filtered_chunk.to_csv(temp_file_path, mode='a', index=False, header=temp_file.tell() == 0)
-    
     temp_file.close()
 
     # Replace the original file with the temporary file
-    os.replace(temp_file_path, csv_file_path)
+    os.replace(temp_file_path, all_csv_file_path)
 
 def write_header_to_csv_file(csv_file_path, feature_names):
     with open(csv_file_path, 'w') as f:
@@ -119,7 +121,6 @@ def write_header_to_csv_file(csv_file_path, feature_names):
         f.write(f"{csv_line}\n")
 
 def write_extracted_field_list_to_file(csv_file_path, extracted_field_list_file_path):
-    extracted_field_list = []
     with open(csv_file_path, 'r') as file:
         csv_reader = csv.reader(file)
         extracted_field_list = next(csv_reader)
@@ -128,26 +129,38 @@ def write_extracted_field_list_to_file(csv_file_path, extracted_field_list_file_
         for field in extracted_field_list[:-1]:
             file.write(f"{field}\n")
 
+def consistent_numerical_hash(token):
+    # Convert the token to bytes if it's a string
+    if isinstance(token, str):
+        token = token.encode('utf-8')
+
+    # Use SHA-256 hashing algorithm
+    hash_object = hashlib.sha256()
+    hash_object.update(token)
+
+    # Convert the hash to a large integer
+    return int.from_bytes(hash_object.digest(), 'big')
+
 def convert_token(token):
     token = token.strip()
     if token:
-        if re.match(r'^0x[0-9a-fA-F]+$', token):
+        if re.match(r'^0x[0-9a-fA-F]+$', token):  # Hexadecimal
             return int(token, 16)
-        elif not is_numeric(token):
-            return hash(token)
-        else:
+        elif is_numeric(token):  # Decimal
             return float(token)
+        else:  # String
+            return consistent_numerical_hash(token)
     else:
-        return -1
+        return -1.0
 
 def modify_dataset(fields):
-    for j, cell in enumerate(fields):
+    for i, cell in enumerate(fields):
         if cell:
             tokens = cell.split(',')
             total = sum(convert_token(token) for token in tokens)
-            fields[j] = str(total % 0xFFFFFFFF)
+            fields[i] = str(total % 0xFFFFFFFF)
         else:
-            fields[j] = '-1.0'
+            fields[i] = '-1.0'
     return fields
 
 def is_numeric(token):
@@ -157,76 +170,75 @@ def is_numeric(token):
     except ValueError:
         return False
 
+
 def remove_duplicates_in_place(file_path):
     seen = set()
-    unique_lines = []
+    temp_file_path = file_path + ".tmp"
 
-    # Read unique lines
-    with open(file_path, 'r') as file:
-        for line in file:
-            if line not in seen:
-                unique_lines.append(line)
-                seen.add(line)
+    try:
+        # Read unique lines and write to a temporary file
+        with open(file_path, 'r') as file, open(temp_file_path, 'w') as temp_file:
+            for line in file:
+                stripped_line = line.strip()  # Optionally strip whitespace
+                if stripped_line not in seen:
+                    temp_file.write(line)
+                    seen.add(stripped_line)
 
-    # Overwrite the file with unique lines
-    with open(file_path, 'w') as file:
-        for line in unique_lines:
-            file.write(line)
+        # Rename the temporary file to original file path
+        os.replace(temp_file_path, file_path)
+    except IOError as e:
+        print(f"An error occurred: {e}")
+        # Optionally remove the temporary file if an error occurred
+        if os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
 
 def count_lines_in_file(file_path):
     with open(file_path, 'r') as file:
         line_count = sum(1 for _ in file)
     return line_count
 
-def split_csv_by_label(input_csv, output_files, chunksize=10000):
+def split_csv_by_label(all_csv_file_path, output_files, chunksize=10000):
     # Check if the number of output files matches the required split count
     split_count = len(output_files)
-    if split_count < 1:
-        raise ValueError("At least one output file must be specified.")
+    if split_count < 2:
+        raise ValueError("At least two output files must be specified.")
 
     # First pass: Count the occurrences of each label
     label_counts = defaultdict(int)
-    with pd.read_csv(input_csv, chunksize=chunksize) as reader:
+    with pd.read_csv(all_csv_file_path, chunksize=chunksize, iterator=True) as reader:
         for chunk in reader:
-            labels = chunk['label'].value_counts()
+            labels = chunk.iloc[:, -1].value_counts()  # Assuming label is in the last column
             for label, count in labels.items():
                 label_counts[label] += count
 
-    # Calculate the number of rows of each label per file
-    label_rows_per_file = {label: np.array_split(range(count), split_count) for label, count in label_counts.items()}
+    # Remove labels where the count is less than the number of splits
+    label_counts = {label: count for label, count in label_counts.items() if count >= split_count}
 
-    # Track the next row index to read for each label in each file
-    next_row_index = {label: [0]*split_count for label in label_counts}
+    # Initialize file handles and write headers
+    file_handles = {file: open(file, 'w') for file in output_files}
+    with open(all_csv_file_path, 'r') as reader:
+        header = reader.readline()
+        for f in file_handles.values():
+            f.write(header)
 
-    # Initialize file pointers for each output file
-    files = {file: open(file, 'w', newline='') for file in output_files}
+    label_index = {label: 0 for label in label_counts}
 
-    # Write headers
-    headers = pd.read_csv(input_csv, nrows=0).to_csv(index=False)
-    for file in files.values():
-        file.write(headers)
+    # Second pass: Distribute rows to each file
+    with open(all_csv_file_path, 'r') as reader:
+        reader.readline()  # Skip the header row
+        for line in reader:
+            label = line.strip().split(',')[-1]
+            if int(label) in label_counts:
+                file_handles[output_files[label_index[int(label)]]].write(line)
+                label_index[int(label)] = (label_index[int(label)] + 1) % split_count
 
-    # Second pass: Distribute rows to files
-    with pd.read_csv(input_csv, chunksize=chunksize) as reader:
-        for chunk in reader:
-            for label, rows in label_rows_per_file.items():
-                label_chunk = chunk[chunk['label'] == label]
-                for i in range(split_count):
-                    # Get the indices for the current chunk
-                    start_idx = next_row_index[label][i]
-                    end_idx = start_idx + len(rows[i])
-                    next_row_index[label][i] = end_idx
+    # Close all file handles
+    for f in file_handles.values():
+        f.close()
 
-                    # Select rows for the current chunk
-                    if start_idx < len(label_chunk):
-                        selected_rows = label_chunk.iloc[start_idx:end_idx]
-                        selected_rows.to_csv(files[output_files[i]], index=False, header=False, mode='a')
-
-    # Close the file pointers
-    for file in files.values():
-        file.close()
-
-def run(blacklist_check, blacklist_file_path, feature_names_file_path, protocol_folder_path, csv_file_paths, pcap_file_names, pcap_file_paths, classes_file_path, extracted_field_list_file_path, statistical_features_on, tshark_filter, all_csv_file_path):
+def run(blacklist_check, blacklist_file_path, feature_names_file_path, protocol_folder_path, csv_file_paths,
+        pcap_file_names, pcap_file_paths, classes_file_path, extracted_field_list_file_path, statistical_features_on,
+        tshark_filter, all_csv_file_path):
     # Create protocol folder
     if not os.path.exists(protocol_folder_path):
         os.makedirs(protocol_folder_path)
@@ -242,11 +254,10 @@ def run(blacklist_check, blacklist_file_path, feature_names_file_path, protocol_
 
     # List of classes (dict)
     list_of_classes = {}
-    class_counter = 0
 
     # Loop through each pcap file in the provided folder
     max_length = max(len(pcap_file_name) for pcap_file_name in pcap_file_names) + (len(pcap_file_names) * 2) + 7
-    for pcap_file_name in pcap_file_names:
+    for class_counter, pcap_file_name in enumerate(pcap_file_names):
         class_name = pcap_file_name.split('.pcap')[0]
         list_of_classes[class_counter] = class_name
         pcap_file_path = pcap_file_paths[class_counter]
@@ -267,11 +278,10 @@ def run(blacklist_check, blacklist_file_path, feature_names_file_path, protocol_
                 for line in proc.stdout:
                     fields = line.split('\t')
                     if len(fields) == len(csv_header) - 1:
-                        if not all(entry == "" for entry in fields): # Filter NaN values
+                        if not all(entry == "" for entry in fields):  # Filter NaN values
                             fields = modify_dataset(fields)
                             fields.append(str(class_counter))
                             file.write(','.join(fields) + '\n')
-        class_counter += 1
 
     print("checking for redundant fields...")
     remove_empty_fields_from_csv_file(all_csv_file_path)
@@ -279,7 +289,6 @@ def run(blacklist_check, blacklist_file_path, feature_names_file_path, protocol_
     print("removing duplicate rows...")
     remove_duplicates_in_place(all_csv_file_path)
 
-    # Add statistical features to csv files
     if statistical_features_on:
         print("adding statistical features...")
         add_stat_features_to_csv_file(all_csv_file_path)

@@ -50,17 +50,21 @@ def onlooker_bees_phase(population, fitness_scores):
         selected_bee = new_population[selected_bee_index]
         j = random.randint(0, len(selected_bee) - 1)
         selected_bee[j] = 1 - selected_bee[j] # Flip the feature
-        if objective_function(selected_bee) <= fitness_scores[selected_bee_index]: # If new solution is worse, revert the change
+        # If new solution is worse, revert the change
+        if objective_function(selected_bee) <= fitness_scores[selected_bee_index]:
             selected_bee[j] = 1 - selected_bee[j]
 
     return new_population
 
 # Select scout bees to replace abandoned solutions
 def scout_bees_phase(population, max_trials):
-    return [[random.choice([0, 1]) for _ in range(len(solution))] if random.random() < 1 / (1 + max_trials) else solution for solution in population]
+    return [[random.choice([0, 1]) for _ in range(len(solution))] if random.random() < 1 / (1 + max_trials)
+            else solution for solution in population]
 
 # ABC feature selection algorithm
-def abc_feature_selection(population_size, solution_size, max_trials, num_cores, log_file_path, classes_file_path, train_file_paths, num_of_packets_to_process, fields_file_path, classifier_index, weights, num_of_iterations, max_num_of_generations, classifiers):
+def abc_feature_selection(population_size, solution_size, max_trials, num_cores, log_file_path, classes_file_path,
+                          train_file_paths, num_of_packets_to_process, fields_file_path, classifier_index, weights,
+                          num_of_iterations, max_num_of_generations, classifiers):
     pre_solutions = defaultdict(float)
 
     # Load classes
@@ -85,8 +89,10 @@ def abc_feature_selection(population_size, solution_size, max_trials, num_cores,
         print(f"The file {fields_file_path} does not exist.")
         sys.exit(1)
 
-    packets_1.extend(element for element in load_csv_and_filter(classes, train_file_paths[0], num_of_packets_to_process, log_file_path))
-    packets_2.extend(element for element in load_csv_and_filter(classes, train_file_paths[1], num_of_packets_to_process, log_file_path))
+    packets_1.extend(element for element in load_csv_and_filter(classes, train_file_paths[0],
+                                                                num_of_packets_to_process, log_file_path))
+    packets_2.extend(element for element in load_csv_and_filter(classes, train_file_paths[1],
+                                                                num_of_packets_to_process, log_file_path))
 
     log("", log_file_path)
 
@@ -108,7 +114,8 @@ def abc_feature_selection(population_size, solution_size, max_trials, num_cores,
 
         # Evaluate the fitness of each solution in the population using multi-threading
         with multiprocessing.Pool(processes=num_cores) as pool:
-            results = pool.starmap(evaluate_fitness, [(solution, packets_1, packets_2, classifier_index, pre_solutions, weights, classifiers) for solution in population])
+            results = pool.starmap(evaluate_fitness, [(solution, packets_1, packets_2, classifier_index, pre_solutions,
+                                                       weights, classifiers) for solution in population])
 
         pool.close()
         pool.join()
@@ -140,7 +147,8 @@ def abc_feature_selection(population_size, solution_size, max_trials, num_cores,
 
     return best_solution, best_fitness
 
-def run(train_file_paths, classifier_index, classes_file_path, num_of_packets_to_process, num_of_iterations, weights, log_file_path, max_num_of_generations, fields_file_path, num_cores, classifiers):
+def run(train_file_paths, classifier_index, classes_file_path, num_of_packets_to_process, num_of_iterations, weights,
+        log_file_path, max_num_of_generations, fields_file_path, num_cores, classifiers):
     # Configuration parameters
     population_size = 50
     max_trials = 5

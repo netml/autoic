@@ -50,13 +50,13 @@ def load_csv_and_filter(classes, fitness_function_file_path, n, log_file_path):
         log("reading from " + classes[str(i)] + "...", log_file_path)
         with open(fitness_function_file_path, 'r', newline='') as csv_file:
             csv_reader = csv.reader(csv_file)
-            next(csv_reader, None) # Skip the header row
+            next(csv_reader, None)  # Skip the header row
 
             lines = [row for row in csv_reader if row[-1] == str(i)]
             random.shuffle(lines)
 
             no_of_packets_to_keep = len(lines) if n == 0 else min(n, len(lines))
-            packets.extend(lines[:no_of_packets_to_keep]) # Append the selected lines directly to packets
+            packets.extend(lines[:no_of_packets_to_keep])  # Append the selected lines directly to packets
 
     packets = [[float(value) for value in packet] for packet in packets]
     
