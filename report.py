@@ -108,7 +108,11 @@ def run(folder, classifiers, classifier_indices):
                         key=lambda s: [int(c) if c.isdigit() else c for c in re.split('([0-9]+)', s)])
     # Get the full paths of the files
     full_paths = [os.path.join(folder, file)
-                  for file in file_names if file.startswith("packets_") and file.endswith(".txt")]
+                  for file in file_names if file.startswith("packets_")]
+
+    # check if the files should end with .txt
+    # full_paths = [os.path.join(folder, file)
+    #               for file in file_names if file.startswith("packets_") and file.endswith(".txt")]
 
     # Get the list of optimization algorithms used to generate the files
     modes = list(set([os.path.basename(path).split('_')[3] for path in full_paths]))

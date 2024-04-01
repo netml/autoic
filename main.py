@@ -38,6 +38,7 @@ if __name__ == '__main__':
     run_number = 0  # 0 means no run number
     num_cores = multiprocessing.cpu_count() - 1  # Determine the number of CPU cores minus 1
     statistical_features_on = False
+    shap_features_on = False
     blacklist_check = True
     pcap_file_names = None
     pcap_file_paths = None
@@ -125,6 +126,9 @@ if __name__ == '__main__':
         elif sys.argv[index] in ('-s', '--statistics'):
             statistical_features_on = True
             index += 1
+        elif sys.argv[index] in ('--shap'):
+            shap_features_on = True
+            index += 1
         elif sys.argv[index] in ('-m', '--mode'):
             if index + 1 >= len(sys.argv):
                 print("Missing value for -m/--mode option")
@@ -197,7 +201,7 @@ if __name__ == '__main__':
         extract.run(
             blacklist_check, blacklist_file_path, feature_names_file_path, protocol_folder_path, csv_file_paths,
             pcap_file_names, pcap_file_paths, classes_file_path, extracted_field_list_file_path,
-            statistical_features_on, tshark_filter, f'{folder}{protocol}/all.csv'
+            statistical_features_on, tshark_filter, shap_features_on, f'{folder}{protocol}/all.csv', f'{folder}{protocol}/shap.csv'
         )
 
         print("done...")
@@ -210,7 +214,7 @@ if __name__ == '__main__':
                 "_mode_" + str(mode) +
                 "_clf_" + classifier_index +
                 "_batch_" + str(batch_number + 1) +
-                "_run_" + str(run_number) if run_number > 0 else "" +
+                ("_run_" + str(run_number) if run_number > 0 else "") +
                 ".txt"
             )
 
@@ -222,7 +226,6 @@ if __name__ == '__main__':
             train_file_paths = [f'{folder}{protocol}/batch_{order_of_batch[0]}.csv',
                                 f'{folder}{protocol}/batch_{order_of_batch[1]}.csv']
             test_file_path = f'{folder}{protocol}/batch_{order_of_batch[2]}.csv'
-            fields_file_path = f'{folder}{protocol}/fields.txt'
 
             best_solution = None
             best_fitness = 0
@@ -231,7 +234,7 @@ if __name__ == '__main__':
                 best_solution, best_fitness = ga.run(
                     train_file_paths, int(classifier_index), classes_file_path,
                     num_of_packets_to_process, num_of_iterations, weights,
-                    log_file_path, max_num_of_generations, fields_file_path,
+                    log_file_path, max_num_of_generations, extracted_field_list_file_path,
                     num_cores, classifiers
                 )
             elif mode == 'aco':
@@ -239,7 +242,7 @@ if __name__ == '__main__':
                 best_solution, best_fitness = aco.run(
                     train_file_paths, int(classifier_index), classes_file_path,
                     num_of_packets_to_process, num_of_iterations, weights,
-                    log_file_path, max_num_of_generations, fields_file_path,
+                    log_file_path, max_num_of_generations, extracted_field_list_file_path,
                     num_cores, classifiers
                 )
             elif mode == 'abc':
@@ -247,7 +250,7 @@ if __name__ == '__main__':
                 best_solution, best_fitness = bee.run(
                     train_file_paths, int(classifier_index), classes_file_path,
                     num_of_packets_to_process, num_of_iterations, weights,
-                    log_file_path, max_num_of_generations, fields_file_path,
+                    log_file_path, max_num_of_generations, extracted_field_list_file_path,
                     num_cores, classifiers
                 )
 

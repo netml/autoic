@@ -9,6 +9,8 @@ import re
 import json
 import statistics
 import os
+import shap_features
+import shutil
 
 def read_blacklisted_features(blacklist_check, blacklist_file_path):
     if blacklist_check:
@@ -197,7 +199,7 @@ def count_lines_in_file(file_path):
         line_count = sum(1 for _ in file)
     return line_count
 
-def split_csv_by_label(all_csv_file_path, output_files, chunksize=10000):
+def split_csv_into_batches(all_csv_file_path, output_files, chunksize=10000):
     # Check if the number of output files matches the required split count
     split_count = len(output_files)
     if split_count < 2:
@@ -221,24 +223,41 @@ def split_csv_by_label(all_csv_file_path, output_files, chunksize=10000):
         for f in file_handles.values():
             f.write(header)
 
-    label_index = {label: 0 for label in label_counts}
+    # Calculate the number of lines to write to each file
+    file_index = {label: [] for label in label_counts}
+    for label in label_counts:
+        max_lines_per_group = label_counts[label] // split_count
+        file_index[label] = [max_lines_per_group for i in range(split_count)]
+        for i in range(label_counts[label] % split_count):
+            file_index[label][i] += 1
 
     # Second pass: Distribute rows to each file
     with open(all_csv_file_path, 'r') as reader:
         reader.readline()  # Skip the header row
         for line in reader:
-            label = line.strip().split(',')[-1]
-            if int(label) in label_counts:
-                file_handles[output_files[label_index[int(label)]]].write(line)
-                label_index[int(label)] = (label_index[int(label)] + 1) % split_count
+            label = int(line.strip().split(',')[-1])
+            if label in label_counts:
+                for i, index in enumerate(file_index[label]):
+                    if index > 0:
+                        file_handles[output_files[i]].write(line)
+                        file_index[label][i] -= 1
+                        break
 
     # Close all file handles
     for f in file_handles.values():
         f.close()
 
+def replace_csv_file(all_csv_file_path, shap_csv_file_path):
+    # Remove the file at all_csv_file_path if it exists
+    if os.path.exists(all_csv_file_path):
+        os.remove(all_csv_file_path)
+    
+    shutil.move(shap_csv_file_path, all_csv_file_path)
+
 def run(blacklist_check, blacklist_file_path, feature_names_file_path, protocol_folder_path, csv_file_paths,
         pcap_file_names, pcap_file_paths, classes_file_path, extracted_field_list_file_path, statistical_features_on,
-        tshark_filter, all_csv_file_path):
+        tshark_filter, shap_features_on, all_csv_file_path, shap_csv_file_path):
+    
     # Create protocol folder
     if not os.path.exists(protocol_folder_path):
         os.makedirs(protocol_folder_path)
@@ -293,13 +312,17 @@ def run(blacklist_check, blacklist_file_path, feature_names_file_path, protocol_
         print("adding statistical features...")
         add_stat_features_to_csv_file(all_csv_file_path)
 
-    split_csv_by_label(all_csv_file_path, csv_file_paths)
+    if shap_features_on:
+        shap_features.run(all_csv_file_path, shap_csv_file_path, protocol_folder_path, 5)
+        replace_csv_file(all_csv_file_path, shap_csv_file_path)
 
-    # Write class list to file
+    split_csv_into_batches(all_csv_file_path, csv_file_paths)
+
+    # Write label list to 'classes.json' file
     with open(classes_file_path, 'w') as json_file:
         json.dump(list_of_classes, json_file)
 
-    # Write remaining field names to file
+    # Write the remaining non-empty and unique field names to 'fields.txt' file
     write_extracted_field_list_to_file(all_csv_file_path, extracted_field_list_file_path)
 
     os.remove(all_csv_file_path)
