@@ -207,7 +207,6 @@ tcp.options.snack.re
 tcp.options.snack.sequence
 tcp.options.snack.size
 tcp.options.tar.reserved
-tcp.options.tarr.rate
 tcp.options.tfo
 tcp.options.tfo.cookie
 tcp.options.tfo.request
@@ -263,8 +262,6 @@ tcp.short_segment
 tcp.srcport
 tcp.stream
 tcp.suboption_malformed
-tcp.syncookie.hash
-tcp.syncookie.mss
 tcp.syncookie.time
 tcp.time_delta
 tcp.time_relative
