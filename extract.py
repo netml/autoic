@@ -268,7 +268,7 @@ def run(blacklist_check, blacklist_file_path, feature_names_file_path, protocol_
     # Read feature names from the filters folder
     csv_header = read_and_filter_feature_names(feature_names_file_path, blacklisted_features)
 
-    # Write header row with feature names to csv files
+    # Write header rows to csv files
     write_header_to_csv_file(all_csv_file_path, csv_header)
 
     # List of classes (dict)
@@ -313,7 +313,7 @@ def run(blacklist_check, blacklist_file_path, feature_names_file_path, protocol_
         add_stat_features_to_csv_file(all_csv_file_path)
 
     if shap_features_on:
-        shap_features.run(all_csv_file_path, shap_csv_file_path, protocol_folder_path, 5)
+        shap_features.run(all_csv_file_path, shap_csv_file_path, protocol_folder_path, 10)
         replace_csv_file(all_csv_file_path, shap_csv_file_path)
 
     split_csv_into_batches(all_csv_file_path, csv_file_paths)
@@ -324,5 +324,3 @@ def run(blacklist_check, blacklist_file_path, feature_names_file_path, protocol_
 
     # Write the remaining non-empty and unique field names to 'fields.txt' file
     write_extracted_field_list_to_file(all_csv_file_path, extracted_field_list_file_path)
-
-    os.remove(all_csv_file_path)
