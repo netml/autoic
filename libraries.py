@@ -103,9 +103,8 @@ def print_usage():
                                     3: Linear SVM
                                     4: MLP
                                     5: Naive Bayes
-                                    6: RIPPER
-                                    7: KNN
-                                    8: Logistic Regression
+                                    6: KNN
+                                    7: Logistic Regression
 
     -b, --num-of-batches <number>   Specify the k-fold cross-validation number. The value should
                                     be an integer. This option is set to 3 by default.

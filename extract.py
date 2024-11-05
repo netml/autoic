@@ -1,5 +1,5 @@
-import hashlib
 from collections import defaultdict
+import hashlib
 import tempfile
 import pandas as pd
 import subprocess
@@ -68,7 +68,7 @@ def add_stat_features_to_csv_file(file_path):
             line = ','.join(map(str, inner_list))  # Convert inner list to a comma-separated string
             file.write(line + '\n')
 
-def remove_empty_fields_from_csv_file(all_csv_file_path, chunk_size=10000):
+def remove_empty_columns_from_csv_file(all_csv_file_path, chunk_size=10000):
     non_unique_columns = set()
     first_chunk = True
     label_column = None
@@ -173,7 +173,7 @@ def is_numeric(token):
         return False
 
 
-def remove_duplicates_in_place(file_path):
+def remove_duplicate_rows_from_csv_file(file_path):
     seen = set()
     temp_file_path = file_path + ".tmp"
 
@@ -227,7 +227,7 @@ def split_csv_into_batches(all_csv_file_path, output_files, chunksize=10000):
     file_index = {label: [] for label in label_counts}
     for label in label_counts:
         max_lines_per_group = label_counts[label] // split_count
-        file_index[label] = [max_lines_per_group for i in range(split_count)]
+        file_index[label] = [max_lines_per_group for _ in range(split_count)]
         for i in range(label_counts[label] % split_count):
             file_index[label][i] += 1
 
@@ -256,8 +256,7 @@ def replace_csv_file(all_csv_file_path, shap_csv_file_path):
 
 def run(blacklist_check, blacklist_file_path, feature_names_file_path, protocol_folder_path, csv_file_paths,
         pcap_file_names, pcap_file_paths, classes_file_path, extracted_field_list_file_path, statistical_features_on,
-        tshark_filter, shap_features_on, all_csv_file_path, shap_csv_file_path):
-    
+        tshark_filter, shap_features_on, all_csv_file_path, shap_csv_file_path, shap_fold_size):
     # Create protocol folder
     if not os.path.exists(protocol_folder_path):
         os.makedirs(protocol_folder_path)
@@ -268,7 +267,7 @@ def run(blacklist_check, blacklist_file_path, feature_names_file_path, protocol_
     # Read feature names from the filters folder
     csv_header = read_and_filter_feature_names(feature_names_file_path, blacklisted_features)
 
-    # Write header rows to csv files
+    # Write header rows to csv file
     write_header_to_csv_file(all_csv_file_path, csv_header)
 
     # List of classes (dict)
@@ -280,7 +279,6 @@ def run(blacklist_check, blacklist_file_path, feature_names_file_path, protocol_
         class_name = pcap_file_name.split('.pcap')[0]
         list_of_classes[class_counter] = class_name
         pcap_file_path = pcap_file_paths[class_counter]
-
         print(f"{'[' + str(class_counter+1) + '/' + str(len(pcap_file_names)) + '] ' + pcap_file_name + '...':<{max_length}}\r", end='')
 
         # Prepare the tshark command
@@ -303,24 +301,25 @@ def run(blacklist_check, blacklist_file_path, feature_names_file_path, protocol_
                             file.write(','.join(fields) + '\n')
 
     print("checking for redundant fields...")
-    remove_empty_fields_from_csv_file(all_csv_file_path)
+    remove_empty_columns_from_csv_file(all_csv_file_path)
 
     print("removing duplicate rows...")
-    remove_duplicates_in_place(all_csv_file_path)
+    remove_duplicate_rows_from_csv_file(all_csv_file_path)
 
     if statistical_features_on:
         print("adding statistical features...")
         add_stat_features_to_csv_file(all_csv_file_path)
 
     if shap_features_on:
-        shap_features.run(all_csv_file_path, shap_csv_file_path, protocol_folder_path, 10)
+        shap_features.run(all_csv_file_path, shap_csv_file_path, protocol_folder_path, shap_fold_size)
         replace_csv_file(all_csv_file_path, shap_csv_file_path)
 
     split_csv_into_batches(all_csv_file_path, csv_file_paths)
 
-    # Write label list to 'classes.json' file
-    with open(classes_file_path, 'w') as json_file:
-        json.dump(list_of_classes, json_file)
-
     # Write the remaining non-empty and unique field names to 'fields.txt' file
     write_extracted_field_list_to_file(all_csv_file_path, extracted_field_list_file_path)
+
+    # Write label list to 'classes.json' file
+    json_data = json.dumps(list_of_classes, ensure_ascii=False)  # Convert list_of_classes to a JSON string
+    with open(classes_file_path, 'w', encoding='utf-8') as json_file:
+        json_file.write(json_data)
