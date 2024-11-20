@@ -172,7 +172,6 @@ def is_numeric(token):
     except ValueError:
         return False
 
-
 def remove_duplicate_rows_from_csv_file(file_path):
     seen = set()
     temp_file_path = file_path + ".tmp"

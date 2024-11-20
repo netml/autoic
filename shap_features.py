@@ -1,4 +1,3 @@
-import sys
 import pandas as pd
 import numpy as np
 from sklearn.tree import DecisionTreeClassifier
@@ -16,20 +15,40 @@ def load_file(fpath):
     return X, y
 
 def shap_feat(model, X):
+    # Create an explainer for the model
     explainer = shap.Explainer(model)
-    instances = X
-    shap_values = explainer.shap_values(instances)
+
+    # Get SHAP values
+    shap_values = explainer(X)
+
+    # Ensure shap_values is a NumPy array and access the values
+    shap_values = shap_values.values if hasattr(shap_values, 'values') else np.array(shap_values)
+
+    # Compute the average SHAP values across instances
     average_shap_values = np.mean(shap_values, axis=0)
+
+    # Get feature names
     feature_names = X.columns.tolist()
+
+    # Create a dictionary for SHAP values of each feature
     all_scr = {feature: shap_value for feature, shap_value in zip(feature_names, average_shap_values)}
+
+    # Log the SHAP feature values
     logging.info("SHAP feature values:")
     logging.info(all_scr)
-    positive_features = [feature for feature, shap_value in zip(feature_names, average_shap_values) if any(shap_value > 0)]
+
+    # Get the positive features based on average SHAP values
+    positive_features = [
+        feature for feature, shap_value in zip(feature_names, average_shap_values) if (shap_value > 0).any()
+    ]
+
+    # Log positive features
     logging.info("Features with Positive Average SHAP Values:")
-    logging.info(f"Total positive features selected: {len(positive_features)} out of total features: {len(feature_names)}, {len(positive_features)}/{len(feature_names)}")
+    logging.info(f"Total positive features selected: {len(positive_features)} out of total features: {len(feature_names)},"
+                 f"{len(positive_features)}/{len(feature_names)}")
     logging.info(positive_features)
-    # print("Total positive features selected:", len(positive_features), "out of total features:", len(feature_names),str(len(positive_features))+"/"+str(len(feature_names)))
-    # print(positive_features)
+
+    # Return the positive features
     return positive_features
 
 def generate_new(features, X, y, folds, shap_csv_file_path):
@@ -59,7 +78,7 @@ def classify(X, y, folds):
     logging.info(f"Mean accuracy: {scores.mean() * 100:.2f}%")
     # print(f"Mean accuracy before shap: {scores.mean() * 100:.2f}%")
     model = clf.fit(X, y)
-    return model,clf
+    return model, clf
 
 def run(all_csv_file_path, shap_csv_file_path, folder_path, folds):
     logfile = os.path.join(folder_path, 'shap' + '.log')
