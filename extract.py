@@ -254,71 +254,94 @@ def replace_csv_file(all_csv_file_path, shap_csv_file_path):
     shutil.move(shap_csv_file_path, all_csv_file_path)
 
 def run(blacklist_check, blacklist_file_path, feature_names_file_path, protocol_folder_path, csv_file_paths,
-        pcap_file_names, pcap_file_paths, classes_file_path, extracted_field_list_file_path, statistical_features_on,
-        tshark_filter, shap_features_on, all_csv_file_path, shap_csv_file_path, shap_fold_size):
-    # Create protocol folder
+        shap_file_paths, pcap_file_names, pcap_file_paths, classes_file_path, extracted_field_list_file_path,
+        shap_extracted_field_list_file_path, statistical_features_on, tshark_filter,
+        all_csv_file_path, shap_csv_file_path, shap_fold_size, shap_features_on):
+
+    # Create protocol folder if it doesn't exist
     if not os.path.exists(protocol_folder_path):
         os.makedirs(protocol_folder_path)
 
-    # Read blacklisted features
-    blacklisted_features = read_blacklisted_features(blacklist_check, blacklist_file_path)
+    # Check if the main CSV file exists; if not, process PCAP files
+    if not os.path.exists(all_csv_file_path):
+        print("converting pcap files to csv format...")
 
-    # Read feature names from the filters folder
-    csv_header = read_and_filter_feature_names(feature_names_file_path, blacklisted_features)
+        # Read blacklisted features
+        blacklisted_features = read_blacklisted_features(blacklist_check, blacklist_file_path)
 
-    # Write header rows to csv file
-    write_header_to_csv_file(all_csv_file_path, csv_header)
+        # Read feature names from the filters folder
+        csv_header = read_and_filter_feature_names(feature_names_file_path, blacklisted_features)
 
-    # List of classes (dict)
-    list_of_classes = {}
+        # Write header rows to CSV file
+        write_header_to_csv_file(all_csv_file_path, csv_header)
 
-    # Loop through each pcap file in the provided folder
-    max_length = max(len(pcap_file_name) for pcap_file_name in pcap_file_names) + (len(pcap_file_names) * 2) + 7
-    for class_counter, pcap_file_name in enumerate(pcap_file_names):
-        class_name = pcap_file_name.split('.pcap')[0]
-        list_of_classes[class_counter] = class_name
-        pcap_file_path = pcap_file_paths[class_counter]
-        print(f"{'[' + str(class_counter+1) + '/' + str(len(pcap_file_names)) + '] ' + pcap_file_name + '...':<{max_length}}\r", end='')
+        # List of classes (dict)
+        list_of_classes = {}
 
-        # Prepare the tshark command
-        tshark_cmd = ['tshark', '-n', '-r', pcap_file_path, '-T', 'fields']
-        if tshark_filter:
-            tshark_cmd.extend(['-Y', tshark_filter])
-        for feature in csv_header[:-1]:
-            tshark_cmd.extend(['-e', feature])
-        tshark_cmd.extend(['-E', 'separator=/t'])
+        # Loop through each PCAP file
+        max_length = max(len(pcap_file_name) for pcap_file_name in pcap_file_names) + (len(pcap_file_names) * 2) + 7
+        for class_counter, pcap_file_name in enumerate(pcap_file_names):
+            class_name = pcap_file_name.split('.pcap')[0]
+            list_of_classes[class_counter] = class_name
+            pcap_file_path = pcap_file_paths[class_counter]
+            print(f"{'[' + str(class_counter+1) + '/' + str(len(pcap_file_names)) + '] ' + pcap_file_name + '...':<{max_length}}\r", end='')
 
-        # Process tshark output line by line
-        with open(all_csv_file_path, 'a') as file:
-            with subprocess.Popen(tshark_cmd, stdout=subprocess.PIPE, text=True) as proc:
-                for line in proc.stdout:
-                    fields = line.split('\t')
-                    if len(fields) == len(csv_header) - 1:
-                        if not all(entry == "" for entry in fields):  # Filter NaN values
-                            fields = modify_dataset(fields)
-                            fields.append(str(class_counter))
-                            file.write(','.join(fields) + '\n')
+            # Prepare the tshark command
+            tshark_cmd = ['tshark', '-n', '-r', pcap_file_path, '-T', 'fields']
+            if tshark_filter:
+                tshark_cmd.extend(['-Y', tshark_filter])
+            for feature in csv_header[:-1]:
+                tshark_cmd.extend(['-e', feature])
+            tshark_cmd.extend(['-E', 'separator=/t'])
 
-    print("checking for redundant fields...")
-    remove_empty_columns_from_csv_file(all_csv_file_path)
+            # Process tshark output line by line
+            with open(all_csv_file_path, 'a') as file:
+                with subprocess.Popen(tshark_cmd, stdout=subprocess.PIPE, text=True) as proc:
+                    for line in proc.stdout:
+                        fields = line.split('\t')
+                        if len(fields) == len(csv_header) - 1:
+                            if not all(entry == "" for entry in fields):  # Filter NaN values
+                                fields = modify_dataset(fields)
+                                fields.append(str(class_counter))
+                                file.write(','.join(fields) + '\n')
 
-    print("removing duplicate rows...")
-    remove_duplicate_rows_from_csv_file(all_csv_file_path)
+        print("removing redundant fields...")
+        remove_empty_columns_from_csv_file(all_csv_file_path)
 
-    if statistical_features_on:
-        print("adding statistical features...")
-        add_stat_features_to_csv_file(all_csv_file_path)
+        print("removing duplicate rows...")
+        remove_duplicate_rows_from_csv_file(all_csv_file_path)
 
+        if statistical_features_on:
+            print("adding statistical features...")
+            add_stat_features_to_csv_file(all_csv_file_path)
+
+    # Run SHAP feature extraction if enabled
     if shap_features_on:
-        shap_features.run(all_csv_file_path, shap_csv_file_path, protocol_folder_path, shap_fold_size)
-        replace_csv_file(all_csv_file_path, shap_csv_file_path)
+        if not os.path.exists(shap_csv_file_path):
+            print("running SHAP feature extraction...")
+            shap_features.run(all_csv_file_path, shap_csv_file_path, protocol_folder_path, shap_fold_size)
 
-    split_csv_into_batches(all_csv_file_path, csv_file_paths)
+    # Check if batch files exist; if not, create them
+    if not all(os.path.exists(file_path) for file_path in csv_file_paths):
+        print("creating the batch files...")
+        split_csv_into_batches(all_csv_file_path, csv_file_paths)
 
-    # Write the remaining non-empty and unique field names to 'fields.txt' file
-    write_extracted_field_list_to_file(all_csv_file_path, extracted_field_list_file_path)
+    if shap_features_on and not all(os.path.exists(file_path) for file_path in shap_file_paths):
+        print("generating SHAP batch files...")
+        split_csv_into_batches(shap_csv_file_path, shap_file_paths)
 
-    # Write label list to 'classes.json' file
-    json_data = json.dumps(list_of_classes, ensure_ascii=False)  # Convert list_of_classes to a JSON string
-    with open(classes_file_path, 'w', encoding='utf-8') as json_file:
-        json_file.write(json_data)
+    # Write extracted field list to files if they don't exist
+    if not os.path.exists(extracted_field_list_file_path):
+        print("generating feature sets...")
+        write_extracted_field_list_to_file(all_csv_file_path, extracted_field_list_file_path)
+
+    if shap_features_on and not os.path.exists(shap_extracted_field_list_file_path):
+        write_extracted_field_list_to_file(shap_csv_file_path, shap_extracted_field_list_file_path)
+
+    # Write classes JSON file if it doesn't exist
+    if not os.path.exists(classes_file_path):
+        print("generating the classes list...")
+        list_of_classes = {i: pcap_file_name.split('.pcap')[0] for i, pcap_file_name in enumerate(pcap_file_names)}
+        json_data = json.dumps(list_of_classes, ensure_ascii=False)  # Convert list_of_classes to JSON string
+        with open(classes_file_path, 'w', encoding='utf-8') as json_file:
+            json_file.write(json_data)

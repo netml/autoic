@@ -1,3 +1,4 @@
+# verify the validation checks after the user providing the features
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC, LinearSVC
@@ -18,7 +19,7 @@ import extract
 import libraries
 
 if __name__ == '__main__':
-    # Check if at least one argument is provided
+    # Exit if no command-line arguments are given
     if len(sys.argv) < 2:
         print("Usage: python script.py arg1 arg2...")
         sys.exit(1)
@@ -35,7 +36,7 @@ if __name__ == '__main__':
     protocol = ""
     tshark_filter = ""
     run_number = 1
-    num_cores = multiprocessing.cpu_count() - 1  # Determine the number of CPU cores minus 1
+    num_cores = multiprocessing.cpu_count() - 1  # Number of cores to use
     statistical_features_on = False
     shap_features_on = False
     blacklist_check = True
@@ -150,11 +151,29 @@ if __name__ == '__main__':
             print(f"Unknown parameter! '{sys.argv[index]}'")
             sys.exit(1)
 
+    # Validation checks
+    required_params = {
+        "folder": folder,
+        "protocol": protocol,
+        "mode": mode,
+    }
+
+    # Include classifier_index only if the mode requires it
+    if mode in ['ga', 'aco', 'abc']:
+        required_params["classifier_index"] = classifier_index
+
+    for param, value in required_params.items():
+        if not value:
+            print(f"Missing required parameter: {param}")
+            sys.exit(1)
+
     # Set parameters
     pcap_folder_path = folder + "pcap"
     classes_file_path = f'{folder}/{protocol}/classes.json'
-    extracted_field_list_file_path = f'{folder}/{protocol}/fields.txt'
-    csv_file_paths = [f'{folder}{protocol}/batch_{i + 1}.csv' for i in range(num_of_batches)]
+    extracted_field_list_file_path = f'{folder}/{protocol}/original_dataset_fields.txt'
+    shap_extracted_field_list_file_path = f'{folder}/{protocol}/shap_dataset_fields.txt'
+    csv_file_paths = [f'{folder}{protocol}/original_dataset_batch_{i + 1}.csv' for i in range(num_of_batches)]
+    shap_file_paths = [f'{folder}{protocol}/shap_dataset_batch_{i + 1}.csv' for i in range(num_of_batches)]
     filters_folder = os.path.join(os.path.dirname(__file__), "filters")
     blacklist_file_path = f'{filters_folder}/blacklist.txt'
     feature_names_file_path = f'{filters_folder}/{protocol}.txt'
@@ -167,10 +186,7 @@ if __name__ == '__main__':
     # Validation checks
     libraries.check_path_exists(folder, 'Workspace folder')
     libraries.check_path_exists(filters_folder, 'filters folder', is_folder=True)
-    if protocol == "":
-        print("Protocol not given!")
-        sys.exit(1)
-    elif mode == 'extract':
+    if mode == 'extract':
         libraries.check_path_exists(pcap_folder_path, 'pcap folder')
         if len(pcap_file_names) == 0:
             print("There are no pcap files in the 'pcap' folder.")
@@ -182,21 +198,20 @@ if __name__ == '__main__':
 
     # Run the mode
     if mode == 'extract':
-        print("converting pcap files to csv format...")
         extract.run(
             blacklist_check, blacklist_file_path, feature_names_file_path, protocol_folder_path, csv_file_paths,
-            pcap_file_names, pcap_file_paths, classes_file_path, extracted_field_list_file_path,
-            statistical_features_on, tshark_filter, shap_features_on, f'{folder}{protocol}/all.csv',
-            f'{folder}{protocol}/shap.csv', shap_fold_size
+            shap_file_paths, pcap_file_names, pcap_file_paths, classes_file_path, extracted_field_list_file_path,
+            shap_extracted_field_list_file_path, statistical_features_on, tshark_filter,
+            f'{folder}{protocol}/original_dataset.csv',
+            f'{folder}{protocol}/shap_dataset.csv', shap_fold_size, shap_features_on
         )
         print("done...")
-    elif mode == 'report':
-        report.run(folder + protocol, classifiers, classifier_index)
     elif mode == 'ga' or mode == 'aco' or mode == 'abc':
         for batch_number, order_of_batch in enumerate(order_of_batches):
             log_file_path = (
                     folder + "/" + protocol + "/" +
-                    "packets_" + str(num_of_packets_to_process) +
+                    ("shap" if shap_features_on else "original") + "_dataset_results" +
+                    "_num_" + str(num_of_packets_to_process) +
                     "_mode_" + str(mode) +
                     "_clf_" + classifier_index +
                     "_batch_" + str(batch_number + 1) +
@@ -207,9 +222,12 @@ if __name__ == '__main__':
             if os.path.exists(log_file_path):
                 os.remove(log_file_path)  # Remove previous log file
 
-            train_file_paths = [f'{folder}{protocol}/batch_{order_of_batch[0]}.csv',
-                                f'{folder}{protocol}/batch_{order_of_batch[1]}.csv']
-            test_file_path = f'{folder}{protocol}/batch_{order_of_batch[2]}.csv'
+            dataset_type = "shap" if shap_features_on else "original"
+            train_file_paths = [
+                f'{folder}{protocol}/{dataset_type}_dataset_batch_{order_of_batch[0]}.csv',
+                f'{folder}{protocol}/{dataset_type}_dataset_batch_{order_of_batch[1]}.csv'
+            ]
+            test_file_path = f'{folder}{protocol}/{dataset_type}_dataset_batch_{order_of_batch[2]}.csv'
 
             best_solution = None
             best_fitness = 0
@@ -218,7 +236,8 @@ if __name__ == '__main__':
                 best_solution, best_fitness = ga.run(
                     train_file_paths, int(classifier_index), classes_file_path,
                     num_of_packets_to_process, num_of_iterations, weights,
-                    log_file_path, max_num_of_generations, extracted_field_list_file_path,
+                    log_file_path, max_num_of_generations,
+                    (shap_extracted_field_list_file_path if shap_features_on else extracted_field_list_file_path),
                     num_cores, classifiers
                 )
             elif mode == 'aco':
@@ -226,7 +245,8 @@ if __name__ == '__main__':
                 best_solution, best_fitness = aco.run(
                     train_file_paths, int(classifier_index), classes_file_path,
                     num_of_packets_to_process, num_of_iterations, weights,
-                    log_file_path, max_num_of_generations, extracted_field_list_file_path,
+                    log_file_path, max_num_of_generations,
+                    (shap_extracted_field_list_file_path if shap_features_on else extracted_field_list_file_path),
                     num_cores, classifiers
                 )
             elif mode == 'abc':
@@ -234,14 +254,16 @@ if __name__ == '__main__':
                 best_solution, best_fitness = bee.run(
                     train_file_paths, int(classifier_index), classes_file_path,
                     num_of_packets_to_process, num_of_iterations, weights,
-                    log_file_path, max_num_of_generations, extracted_field_list_file_path,
+                    log_file_path, max_num_of_generations,
+                    (shap_extracted_field_list_file_path if shap_features_on else extracted_field_list_file_path),
                     num_cores, classifiers
                 )
 
             # Read the extracted field list
             extracted_field_list = []
-            if os.path.exists(extracted_field_list_file_path):
-                with open(extracted_field_list_file_path, 'r') as file:
+            file_path = extracted_field_list_file_path if shap_features_on else shap_extracted_field_list_file_path
+            if os.path.exists(file_path):
+                with open(file_path, 'r') as file:
                     extracted_field_list = [line.strip() for line in file.readlines()]
 
             # Print best solution and the features selected
@@ -263,5 +285,7 @@ if __name__ == '__main__':
             log("All feature-set results:", log_file_path)
             ml.classify_after_filtering(best_solution, train_file_paths, test_file_path, int(classifier_index),
                                         log_file_path, classifiers, False)
+    elif mode == 'report':
+        report.run(folder + protocol, classifiers, classifier_index)
     else:
         print("Unknown entry for the mode!")
