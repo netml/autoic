@@ -48,10 +48,20 @@ if __name__ == '__main__':
         ("RF", RandomForestClassifier(random_state=42)),
         ("SVC", SVC(random_state=42)),
         ("LiSVC", LinearSVC(random_state=42, dual='auto', C=1.0, max_iter=10000)),
-        ("MLP", MLPClassifier(hidden_layer_sizes=(100, 50), max_iter=2000, alpha=0.0001,
-                              learning_rate='adaptive', learning_rate_init=0.001, batch_size='auto',
-                              early_stopping=True, validation_fraction=0.1, n_iter_no_change=10,
-                              activation='relu', solver='adam', random_state=42)),
+        ("MLP", MLPClassifier(
+                    hidden_layer_sizes=(512, 256),  # Reflecting the two dense layers in your TensorFlow model
+                    max_iter=500,                  # Equivalent to the 500 epochs
+                    alpha=0.001,                   # Regularization strength (kernel_regularizer in TensorFlow)
+                    learning_rate='adaptive',      # To dynamically adjust the learning rate
+                    learning_rate_init=0.001,      # Initial learning rate matching RMSprop's learning rate
+                    batch_size=32,                 # Matches the batch size in TensorFlow
+                    early_stopping=True,           # To stop training based on validation loss
+                    validation_fraction=0.3,       # Matches the 30% validation split
+                    n_iter_no_change=30,           # Reflects patience for early stopping
+                    activation='relu',             # Matches the activation functions in TensorFlow
+                    solver='adam',                 # Closest Scikit-learn equivalent to RMSprop optimizer
+                    random_state=42                # Ensures reproducibility
+        )),
         ("GNB", GaussianNB()),
         ("KNN", KNeighborsClassifier()),
         ("LR", LogisticRegression(solver='saga', multi_class='ovr', max_iter=10000))
@@ -261,7 +271,7 @@ if __name__ == '__main__':
 
             # Read the extracted field list
             extracted_field_list = []
-            file_path = extracted_field_list_file_path if shap_features_on else shap_extracted_field_list_file_path
+            file_path = shap_extracted_field_list_file_path if shap_features_on else extracted_field_list_file_path
             if os.path.exists(file_path):
                 with open(file_path, 'r') as file:
                     extracted_field_list = [line.strip() for line in file.readlines()]
@@ -271,6 +281,7 @@ if __name__ == '__main__':
             log(f"Best Solution:\t[{sol_str}]\t[{sol_str.count('1')}/{len(sol_str)}]\tFitness: {best_fitness}",
                 log_file_path)
             log("\nSelected features:", log_file_path)
+
             for i in range(len(best_solution)):
                 if best_solution[i] == 1:
                     log(extracted_field_list[i], log_file_path)
