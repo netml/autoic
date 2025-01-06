@@ -49,7 +49,7 @@ if __name__ == '__main__':
         ("SVC", SVC(random_state=42)),
         ("LiSVC", LinearSVC(random_state=42, dual='auto', C=1.0, max_iter=10000)),
         ("MLP", MLPClassifier(
-                    hidden_layer_sizes=(512, 256),  # Reflecting the two dense layers in your TensorFlow model
+                    hidden_layer_sizes=(512, 256), # Reflecting the two dense layers in your TensorFlow model
                     max_iter=500,                  # Equivalent to the 500 epochs
                     alpha=0.001,                   # Regularization strength (kernel_regularizer in TensorFlow)
                     learning_rate='adaptive',      # To dynamically adjust the learning rate
