@@ -9,6 +9,7 @@ import re
 import json
 import statistics
 import os
+import libraries
 import shap_features
 import shutil
 
@@ -198,7 +199,7 @@ def count_lines_in_file(file_path):
         line_count = sum(1 for _ in file)
     return line_count
 
-def split_csv_into_batches(all_csv_file_path, output_files, chunksize=10000):
+def split_csv(all_csv_file_path, output_files, chunksize=10000):
     # Check if the number of output files matches the required split count
     split_count = len(output_files)
     if split_count < 2:
@@ -253,10 +254,10 @@ def replace_csv_file(all_csv_file_path, shap_csv_file_path):
     
     shutil.move(shap_csv_file_path, all_csv_file_path)
 
-def run(blacklist_check, blacklist_file_path, feature_names_file_path, protocol_folder_path, csv_file_paths,
+def run(blacklist_check, blacklist_file_path, feature_names_file_path, protocol_folder_path, split_file_paths,
         shap_file_paths, pcap_file_names, pcap_file_paths, classes_file_path, extracted_field_list_file_path,
         shap_extracted_field_list_file_path, statistical_features_on, tshark_filter,
-        all_csv_file_path, shap_csv_file_path, shap_fold_size, shap_features_on):
+        all_csv_file_path, shap_csv_file_path, shap_fold_size, shap_features_on, batch_file_paths, num_of_batches):
 
     # Create protocol folder if it doesn't exist
     if not os.path.exists(protocol_folder_path):
@@ -315,20 +316,45 @@ def run(blacklist_check, blacklist_file_path, feature_names_file_path, protocol_
             print("adding statistical features...")
             add_stat_features_to_csv_file(all_csv_file_path)
 
+    # Check if split files exist; if not, create them
+    if not all(os.path.exists(file_path) for file_path in split_file_paths):
+        print("creating the split files...")
+        split_csv(all_csv_file_path, split_file_paths)
+
+    # Create batch files
+    if not all(os.path.exists(file_path) for file_path in [file_path for sublist in batch_file_paths for file_path in sublist]):
+        print("creating the batch files...")
+        # Create test files
+        for i in range(num_of_batches):
+            # Create test files
+            libraries.copy_file(split_file_paths[i], batch_file_paths[1][i])
+
+            # Create train files
+            train_files = [file_path for j, file_path in enumerate(split_file_paths) if j != i]
+            header_written = False
+
+            with open(batch_file_paths[0][i], 'w') as train_file:
+                for file_path in train_files:
+                    with open(file_path, 'r') as file:
+                        for line_num, line in enumerate(file):
+                            # Write header only once
+                            if line_num == 0:
+                                if not header_written:
+                                    train_file.write(line)
+                                    header_written = True
+                                continue
+                            # Write the remaining lines
+                            train_file.write(line)
+
     # Run SHAP feature extraction if enabled
     if shap_features_on:
         if not os.path.exists(shap_csv_file_path):
             print("running SHAP feature extraction...")
             shap_features.run(all_csv_file_path, shap_csv_file_path, protocol_folder_path, shap_fold_size)
 
-    # Check if batch files exist; if not, create them
-    if not all(os.path.exists(file_path) for file_path in csv_file_paths):
-        print("creating the batch files...")
-        split_csv_into_batches(all_csv_file_path, csv_file_paths)
-
     if shap_features_on and not all(os.path.exists(file_path) for file_path in shap_file_paths):
         print("generating SHAP batch files...")
-        split_csv_into_batches(shap_csv_file_path, shap_file_paths)
+        split_csv(shap_csv_file_path, shap_file_paths)
 
     # Write extracted field list to files if they don't exist
     if not os.path.exists(extracted_field_list_file_path):

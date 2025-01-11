@@ -3,6 +3,7 @@ from libraries import log
 import numpy as np
 import ml
 import csv
+import sys
 import random
 
 def evaluate_fitness(solution, packets_1, packets_2, classifier_index, pre_solutions, weights, classifiers):
@@ -44,20 +45,56 @@ def evaluate_fitness(solution, packets_1, packets_2, classifier_index, pre_solut
 
     return fitness, pre_solutions_gen
 
-def load_csv_and_filter(classes, fitness_function_file_path, n, log_file_path):
-    packets = []
+def read_header_from_file(file_path):
+    try:
+        with open(file_path, 'r') as file:
+            return [line.strip() for line in file.readlines()] + ['label']
+    except FileNotFoundError:
+        print(f"Error: The file {file_path} does not exist.")
+        sys.exit(1)
+
+def load_csv_and_filter(classes, fitness_function_file_path, n, log_file_path, fields_file_path):
+    packets_1 = []
+    packets_2 = []
+
+    # Read header from the fields file
+    header = read_header_from_file(fields_file_path)
+    packets_1.append(header)
+    packets_2.append(header)
+
     for i in range(len(classes)):
-        log("reading from " + classes[str(i)] + "...", log_file_path)
-        with open(fitness_function_file_path, 'r', newline='') as csv_file:
-            csv_reader = csv.reader(csv_file)
-            next(csv_reader, None)  # Skip the header row
+        log(f"Reading from {classes[str(i)]}...", log_file_path)
 
-            lines = [row for row in csv_reader if row[-1] == str(i)]
-            random.shuffle(lines)
+        try:
+            with open(fitness_function_file_path, 'r', newline='') as csv_file:
+                csv_reader = csv.reader(csv_file)
+                next(csv_reader, None)  # Skip the header row
 
-            no_of_packets_to_keep = len(lines) if n == 0 else min(n, len(lines))
-            packets.extend(lines[:no_of_packets_to_keep])  # Append the selected lines directly to packets
+                # Filter and shuffle rows
+                lines = [row for row in csv_reader if row[-1] == str(i)]
+                random.shuffle(lines)
 
-    packets = [[float(value) for value in packet] for packet in packets]
-    
-    return packets
+                # Determine the number of packets to keep
+                no_of_packets_to_keep = len(lines) if n == 0 else min(n, len(lines))
+                selected_lines = lines[:no_of_packets_to_keep]
+
+                # Split the selected lines into two halves
+                split_index = len(selected_lines) // 2
+                packets_1.extend(selected_lines[:split_index])
+                packets_2.extend(selected_lines[split_index:])
+        except FileNotFoundError:
+            print(f"Error: The file {fitness_function_file_path} does not exist.")
+            sys.exit(1)
+
+    # Convert to float values for both packets_1 and packets_2, skipping the header
+    def convert_to_float(packets):
+        try:
+            return [[float(value) for value in packet] for packet in packets[1:]]
+        except ValueError as e:
+            print(f"Error converting to float: {e}")
+            sys.exit(1)
+
+    packets_1[1:] = convert_to_float(packets_1)
+    packets_2[1:] = convert_to_float(packets_2)
+
+    return packets_1, packets_2

@@ -63,7 +63,7 @@ def scout_bees_phase(population, max_trials):
 
 # ABC feature selection algorithm
 def abc_feature_selection(population_size, solution_size, max_trials, num_cores, log_file_path, classes_file_path,
-                          train_file_paths, num_of_packets_to_process, fields_file_path, classifier_index, weights,
+                          optimization_train_file_path, num_of_packets_to_process, fields_file_path, classifier_index, weights,
                           num_of_iterations, max_num_of_generations, classifiers):
     pre_solutions = defaultdict(float)
 
@@ -76,23 +76,10 @@ def abc_feature_selection(population_size, solution_size, max_trials, num_cores,
 
     # Load the packets
     log("loading packets...", log_file_path)
-    packets_1 = []
-    packets_2 = []
 
-    # Read header from fields file
-    try:
-        with open(fields_file_path, 'r') as file:
-            header = [line.strip() for line in file.readlines()] + ['label']
-            packets_1.append(header)
-            packets_2.append(header)
-    except FileNotFoundError:
-        print(f"The file {fields_file_path} does not exist.")
-        sys.exit(1)
-
-    packets_1.extend(element for element in load_csv_and_filter(classes, train_file_paths[0],
-                                                                num_of_packets_to_process, log_file_path))
-    packets_2.extend(element for element in load_csv_and_filter(classes, train_file_paths[1],
-                                                                num_of_packets_to_process, log_file_path))
+    # Assuming packets_1 and packets_2 are already defined and contain existing data
+    packets_1, packets_2 = load_csv_and_filter(classes, optimization_train_file_path, num_of_packets_to_process,
+                                                       log_file_path, fields_file_path)
 
     log("", log_file_path)
 
@@ -147,7 +134,7 @@ def abc_feature_selection(population_size, solution_size, max_trials, num_cores,
 
     return best_solution, best_fitness
 
-def run(train_file_paths, classifier_index, classes_file_path, num_of_packets_to_process, num_of_iterations, weights,
+def run(optimization_train_file_path, classifier_index, classes_file_path, num_of_packets_to_process, num_of_iterations, weights,
         log_file_path, max_num_of_generations, fields_file_path, num_cores, classifiers):
     # Configuration parameters
     population_size = 50
@@ -155,14 +142,14 @@ def run(train_file_paths, classifier_index, classes_file_path, num_of_packets_to
 
     # Determine solution size (number of features)
     try:
-        with open(train_file_paths[0], 'r') as file:
+        with open(optimization_train_file_path, 'r') as file:
             solution_size = len(file.readline().split(',')) - 1
     except FileNotFoundError:
-        print(f"The file {train_file_paths[0]} does not exist.")
+        print(f"The file {optimization_train_file_path} does not exist.")
         sys.exit(1)
 
     return abc_feature_selection(
         population_size, solution_size, max_trials, num_cores, log_file_path, classes_file_path,
-        train_file_paths, num_of_packets_to_process, fields_file_path, classifier_index, weights,
+        optimization_train_file_path, num_of_packets_to_process, fields_file_path, classifier_index, weights,
         num_of_iterations, max_num_of_generations, classifiers
     )

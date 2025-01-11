@@ -49,18 +49,18 @@ if __name__ == '__main__':
         ("SVC", SVC(random_state=42)),
         ("LiSVC", LinearSVC(random_state=42, dual='auto', C=1.0, max_iter=10000)),
         ("MLP", MLPClassifier(
-                    hidden_layer_sizes=(512, 256), # Reflecting the two dense layers in your TensorFlow model
-                    max_iter=500,                  # Equivalent to the 500 epochs
-                    alpha=0.001,                   # Regularization strength (kernel_regularizer in TensorFlow)
-                    learning_rate='adaptive',      # To dynamically adjust the learning rate
-                    learning_rate_init=0.001,      # Initial learning rate matching RMSprop's learning rate
-                    batch_size=32,                 # Matches the batch size in TensorFlow
-                    early_stopping=True,           # To stop training based on validation loss
-                    validation_fraction=0.3,       # Matches the 30% validation split
-                    n_iter_no_change=30,           # Reflects patience for early stopping
-                    activation='relu',             # Matches the activation functions in TensorFlow
-                    solver='adam',                 # Closest Scikit-learn equivalent to RMSprop optimizer
-                    random_state=42                # Ensures reproducibility
+            hidden_layer_sizes=(512, 256), # Reflecting the two dense layers in your TensorFlow model
+            max_iter=500,                  # Equivalent to the 500 epochs
+            alpha=0.001,                   # Regularization strength (kernel_regularizer in TensorFlow)
+            learning_rate='adaptive',      # To dynamically adjust the learning rate
+            learning_rate_init=0.001,      # Initial learning rate matching RMSprop's learning rate
+            batch_size=32,                 # Matches the batch size in TensorFlow
+            early_stopping=True,           # To stop training based on validation loss
+            validation_fraction=0.3,       # Matches the 30% validation split
+            n_iter_no_change=30,           # Reflects patience for early stopping
+            activation='relu',             # Matches the activation functions in TensorFlow
+            solver='adam',                 # Closest Scikit-learn equivalent to RMSprop optimizer
+            random_state=42                # Ensures reproducibility
         )),
         ("GNB", GaussianNB()),
         ("KNN", KNeighborsClassifier()),
@@ -182,7 +182,9 @@ if __name__ == '__main__':
     classes_file_path = f'{folder}/{protocol}/classes.json'
     extracted_field_list_file_path = f'{folder}/{protocol}/original_dataset_fields.txt'
     shap_extracted_field_list_file_path = f'{folder}/{protocol}/shap_dataset_fields.txt'
-    csv_file_paths = [f'{folder}{protocol}/original_dataset_batch_{i + 1}.csv' for i in range(num_of_batches)]
+    split_file_paths = [f'{folder}{protocol}/original_dataset_split_{i + 1}.csv' for i in range(num_of_batches)]
+    batch_file_paths = [[f'{folder}{protocol}/original_dataset_batch_{i + 1}_train.csv' for i in range(num_of_batches)],
+                        [f'{folder}{protocol}/original_dataset_batch_{i + 1}_test.csv' for i in range(num_of_batches)]]
     shap_file_paths = [f'{folder}{protocol}/shap_dataset_batch_{i + 1}.csv' for i in range(num_of_batches)]
     filters_folder = os.path.join(os.path.dirname(__file__), "filters")
     blacklist_file_path = f'{filters_folder}/blacklist.txt'
@@ -209,42 +211,41 @@ if __name__ == '__main__':
     # Run the mode
     if mode == 'extract':
         extract.run(
-            blacklist_check, blacklist_file_path, feature_names_file_path, protocol_folder_path, csv_file_paths,
+            blacklist_check, blacklist_file_path, feature_names_file_path, protocol_folder_path, split_file_paths,
             shap_file_paths, pcap_file_names, pcap_file_paths, classes_file_path, extracted_field_list_file_path,
             shap_extracted_field_list_file_path, statistical_features_on, tshark_filter,
             f'{folder}{protocol}/original_dataset.csv',
-            f'{folder}{protocol}/shap_dataset.csv', shap_fold_size, shap_features_on
+            f'{folder}{protocol}/shap_dataset.csv', shap_fold_size, shap_features_on, batch_file_paths,
+            num_of_batches
         )
         print("done...")
     elif mode == 'ga' or mode == 'aco' or mode == 'abc':
         for batch_number, order_of_batch in enumerate(order_of_batches):
             log_file_path = (
-                    folder + "/" + protocol + "/" +
-                    ("shap" if shap_features_on else "original") + "_dataset_results" +
-                    "_num_" + str(num_of_packets_to_process) +
-                    "_mode_" + str(mode) +
-                    "_clf_" + classifier_index +
-                    "_batch_" + str(batch_number + 1) +
-                    "_run_" + str(run_number) +
-                    ".txt"
+                folder + "/" + protocol + "/" +
+                ("shap" if shap_features_on else "original") + "_dataset_results" +
+                "_num_" + str(num_of_packets_to_process) +
+                "_mode_" + str(mode) +
+                "_clf_" + classifier_index +
+                "_batch_" + str(batch_number + 1) +
+                "_run_" + str(run_number) +
+                ".txt"
             )
 
             if os.path.exists(log_file_path):
                 os.remove(log_file_path)  # Remove previous log file
 
             dataset_type = "shap" if shap_features_on else "original"
-            train_file_paths = [
-                f'{folder}{protocol}/{dataset_type}_dataset_batch_{order_of_batch[0]}.csv',
-                f'{folder}{protocol}/{dataset_type}_dataset_batch_{order_of_batch[1]}.csv'
-            ]
-            test_file_path = f'{folder}{protocol}/{dataset_type}_dataset_batch_{order_of_batch[2]}.csv'
+
+            optimization_train_file_path = batch_file_paths[0][batch_number]
+            optimization_test_file_path = batch_file_paths[1][batch_number]
 
             best_solution = None
             best_fitness = 0
             if mode == 'ga':
                 log("running GA...\n", log_file_path)
                 best_solution, best_fitness = ga.run(
-                    train_file_paths, int(classifier_index), classes_file_path,
+                    optimization_train_file_path, int(classifier_index), classes_file_path,
                     num_of_packets_to_process, num_of_iterations, weights,
                     log_file_path, max_num_of_generations,
                     (shap_extracted_field_list_file_path if shap_features_on else extracted_field_list_file_path),
@@ -253,7 +254,7 @@ if __name__ == '__main__':
             elif mode == 'aco':
                 log("running ACO...\n", log_file_path)
                 best_solution, best_fitness = aco.run(
-                    train_file_paths, int(classifier_index), classes_file_path,
+                    optimization_train_file_path, int(classifier_index), classes_file_path,
                     num_of_packets_to_process, num_of_iterations, weights,
                     log_file_path, max_num_of_generations,
                     (shap_extracted_field_list_file_path if shap_features_on else extracted_field_list_file_path),
@@ -262,7 +263,7 @@ if __name__ == '__main__':
             elif mode == 'abc':
                 log("running ABC...\n", log_file_path)
                 best_solution, best_fitness = bee.run(
-                    train_file_paths, int(classifier_index), classes_file_path,
+                    optimization_train_file_path, int(classifier_index), classes_file_path,
                     num_of_packets_to_process, num_of_iterations, weights,
                     log_file_path, max_num_of_generations,
                     (shap_extracted_field_list_file_path if shap_features_on else extracted_field_list_file_path),
@@ -280,21 +281,38 @@ if __name__ == '__main__':
             sol_str = ''.join(map(str, best_solution))
             log(f"Best Solution:\t[{sol_str}]\t[{sol_str.count('1')}/{len(sol_str)}]\tFitness: {best_fitness}",
                 log_file_path)
-            log("\nSelected features:", log_file_path)
 
+            # Get the selected features
+            selected_field_list = []
             for i in range(len(best_solution)):
                 if best_solution[i] == 1:
-                    log(extracted_field_list[i], log_file_path)
+                    selected_field_list.append(extracted_field_list[i])
+
+            selected_features_batch_paths = [
+                f'{folder}{protocol}/{dataset_type}_{mode}_dataset_batch_{order_of_batch[0]}.csv',
+                f'{folder}{protocol}/{dataset_type}_{mode}_dataset_batch_{order_of_batch[1]}.csv',
+                f'{folder}{protocol}/{dataset_type}_{mode}_dataset_batch_{order_of_batch[2]}.csv'
+            ]
+
+            # # Create the selected features CSV files
+            # columns_to_keep = selected_field_list + ['label']
+            # for i in range(len(order_of_batches)):
+            #     libraries.filter_columns(f'{folder}{protocol}/{dataset_type}_dataset_batch_{order_of_batch[i]}.csv', selected_features_batch_paths[i], columns_to_keep)
+
+            # Print the selected features
+            log("\nSelected features:", log_file_path)
+            for i in range(len(selected_field_list)):
+                log(selected_field_list[i], log_file_path)
 
             # Print the classification result on test data using selected features
             log("", log_file_path)
             log("Selected feature-set results:", log_file_path)
-            ml.classify_after_filtering(best_solution, train_file_paths, test_file_path, int(classifier_index),
+            ml.classify_after_filtering(best_solution, optimization_train_file_path, optimization_test_file_path, int(classifier_index),
                                         log_file_path, classifiers, True)
             
             # Print the classification result on test data using all features
             log("All feature-set results:", log_file_path)
-            ml.classify_after_filtering(best_solution, train_file_paths, test_file_path, int(classifier_index),
+            ml.classify_after_filtering(best_solution, optimization_train_file_path, optimization_test_file_path, int(classifier_index),
                                         log_file_path, classifiers, False)
     elif mode == 'report':
         report.run(folder + protocol, classifiers, classifier_index)

@@ -1,7 +1,17 @@
 import sys
 import os
 import textwrap
+import pandas as pd
+import shutil
 
+
+def copy_file(input_path, output_path):
+    try:
+        shutil.copy(input_path, output_path)
+    except FileNotFoundError:
+        print(f"Error: The file '{input_path}' does not exist.")
+    except IOError as e:
+        print(f"Error: Unable to copy file. {e}")
 
 def log(message, log_file_path):
     print(message)
@@ -28,6 +38,23 @@ def generate_specific_combinations(n):
         combination.append(i)
         combinations.append(combination)
     return combinations
+
+def filter_columns(input_csv, output_csv, columns_to_keep, chunk_size=10000):
+    # Open the output file in write mode
+    with open(output_csv, 'w', newline='', encoding='utf-8') as output_file:
+        writer = None
+
+        # Process the input CSV in chunks
+        for chunk in pd.read_csv(input_csv, chunksize=chunk_size):
+            # Keep only the required columns
+            filtered_chunk = chunk[columns_to_keep]
+
+            # If writer is not initialized, write the header
+            if writer is None:
+                writer = filtered_chunk.to_csv(output_file, index=False)
+            else:
+                # Append the chunk without writing the header again
+                filtered_chunk.to_csv(output_file, index=False, header=False)
 
 def print_usage():
     message = textwrap.dedent("""\

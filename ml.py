@@ -27,8 +27,8 @@ def extract_features_and_labels(data, label_column_index):
     labels = [row[label_column_index] for row in data]  # Extract labels by selecting the label column from each row
     return features, labels
 
-def train_and_evaluate_classifier(classifier_index, train_features, train_labels,
-                                  test_features, test_labels, classifiers):
+def train_and_evaluate_classifier(classifier_index, train_features, train_labels, test_features,
+                                  test_labels, classifiers):
     if classifier_index < 0 or classifier_index >= len(classifiers):
         raise ValueError("Invalid classifier index")
 
@@ -48,17 +48,16 @@ def classify(train, test, classifier_index, classifiers):
         test_features, test_labels = extract_features_and_labels(test[1:], label_column_index)
 
         # Train and evaluate the classifier
-        return train_and_evaluate_classifier(classifier_index, train_features,
-                                             train_labels, test_features, test_labels, classifiers)
+        return train_and_evaluate_classifier(classifier_index, train_features, train_labels, test_features,
+                                             test_labels, classifiers)
     except ValueError as e:
         print(f"Error: {e}")
 
-def classify_after_filtering(solution, fitness_function_file_paths, test_file_path,
+def classify_after_filtering(solution, optimization_train_file_path, optimization_test_file_path,
                              classifier_index, log_file_path, classifiers, filter):
     # Load training and testing data, remove duplicates (fitness_function_file_paths[1] except for header)
-    train = remove_duplicates_list_list(load_csv(fitness_function_file_paths[0]) +
-                                        load_csv(fitness_function_file_paths[1])[1:])
-    test = remove_duplicates_list_list(load_csv(test_file_path))
+    train = remove_duplicates_list_list(load_csv(optimization_train_file_path))
+    test = remove_duplicates_list_list(load_csv(optimization_test_file_path))
 
     if filter:  # Apply feature filtering if necessary
         solution_new = list(solution) + [1]  # Append 1 to the end so that it doesn't filter out the 'class' column
