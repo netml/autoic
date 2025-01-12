@@ -182,10 +182,10 @@ if __name__ == '__main__':
     classes_file_path = f'{folder}/{protocol}/classes.json'
     extracted_field_list_file_path = f'{folder}/{protocol}/original_dataset_fields.txt'
     shap_extracted_field_list_file_path = f'{folder}/{protocol}/shap_dataset_fields.txt'
-    split_file_paths = [f'{folder}{protocol}/original_dataset_split_{i + 1}.csv' for i in range(num_of_batches)]
-    batch_file_paths = [[f'{folder}{protocol}/original_dataset_batch_{i + 1}_train.csv' for i in range(num_of_batches)],
-                        [f'{folder}{protocol}/original_dataset_batch_{i + 1}_test.csv' for i in range(num_of_batches)]]
-    shap_file_paths = [f'{folder}{protocol}/shap_dataset_batch_{i + 1}.csv' for i in range(num_of_batches)]
+    split_file_paths = [f'{folder}{protocol}/original_dataset_split_{i+1}.csv' for i in range(num_of_batches)]
+    batch_file_paths = [[f'{folder}{protocol}/original_dataset_batch_{i+1}_train.csv' for i in range(num_of_batches)],
+                        [f'{folder}{protocol}/original_dataset_batch_{i+1}_test.csv' for i in range(num_of_batches)]]
+    shap_file_paths = [f'{folder}{protocol}/shap_dataset_batch_{i+1}.csv' for i in range(num_of_batches)]
     filters_folder = os.path.join(os.path.dirname(__file__), "filters")
     blacklist_file_path = f'{filters_folder}/blacklist.txt'
     feature_names_file_path = f'{filters_folder}/{protocol}.txt'
@@ -242,6 +242,7 @@ if __name__ == '__main__':
 
             best_solution = None
             best_fitness = 0
+
             if mode == 'ga':
                 log("running GA...\n", log_file_path)
                 best_solution, best_fitness = ga.run(
@@ -289,15 +290,20 @@ if __name__ == '__main__':
                     selected_field_list.append(extracted_field_list[i])
 
             selected_features_batch_paths = [
-                f'{folder}{protocol}/{dataset_type}_{mode}_dataset_batch_{order_of_batch[0]}.csv',
-                f'{folder}{protocol}/{dataset_type}_{mode}_dataset_batch_{order_of_batch[1]}.csv',
-                f'{folder}{protocol}/{dataset_type}_{mode}_dataset_batch_{order_of_batch[2]}.csv'
+                f'{folder}{protocol}/{dataset_type}_{mode}_dataset_batch_{batch_number+1}_train.csv',
+                f'{folder}{protocol}/{dataset_type}_{mode}_dataset_batch_{batch_number+1}_test.csv'
             ]
 
-            # # Create the selected features CSV files
-            # columns_to_keep = selected_field_list + ['label']
-            # for i in range(len(order_of_batches)):
-            #     libraries.filter_columns(f'{folder}{protocol}/{dataset_type}_dataset_batch_{order_of_batch[i]}.csv', selected_features_batch_paths[i], columns_to_keep)
+            # Create the selected features CSV files
+            columns_to_keep = selected_field_list + ['label']
+            libraries.filter_columns(
+                f'{folder}{protocol}/{dataset_type}_dataset_batch_{order_of_batch[batch_number]}_train.csv',
+                selected_features_batch_paths[0], columns_to_keep
+            )
+            libraries.filter_columns(
+                f'{folder}{protocol}/{dataset_type}_dataset_batch_{order_of_batch[batch_number]}_test.csv',
+                selected_features_batch_paths[1], columns_to_keep
+            )
 
             # Print the selected features
             log("\nSelected features:", log_file_path)
@@ -307,13 +313,13 @@ if __name__ == '__main__':
             # Print the classification result on test data using selected features
             log("", log_file_path)
             log("Selected feature-set results:", log_file_path)
-            ml.classify_after_filtering(best_solution, optimization_train_file_path, optimization_test_file_path, int(classifier_index),
-                                        log_file_path, classifiers, True)
+            ml.classify_after_filtering(best_solution, optimization_train_file_path, optimization_test_file_path,
+                                        int(classifier_index), log_file_path, classifiers, True)
             
             # Print the classification result on test data using all features
             log("All feature-set results:", log_file_path)
-            ml.classify_after_filtering(best_solution, optimization_train_file_path, optimization_test_file_path, int(classifier_index),
-                                        log_file_path, classifiers, False)
+            ml.classify_after_filtering(best_solution, optimization_train_file_path, optimization_test_file_path,
+                                        int(classifier_index), log_file_path, classifiers, False)
     elif mode == 'report':
         report.run(folder + protocol, classifiers, classifier_index)
     else:
