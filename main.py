@@ -28,7 +28,7 @@ if __name__ == '__main__':
     classifier_index = ""
     max_num_of_generations = 100
     num_of_iterations = 10
-    num_of_packets_to_process = 0
+    num_of_packets_to_process = 0 # 0 means all packets
     num_of_batches = 3
     weights = [0.9, 0.1]
     mode = ""
@@ -178,14 +178,15 @@ if __name__ == '__main__':
             sys.exit(1)
 
     # Set parameters
+    dataset_type = "shap" if shap_features_on else "original"
     pcap_folder_path = folder + "pcap"
     classes_file_path = f'{folder}/{protocol}/classes.json'
-    extracted_field_list_file_path = f'{folder}/{protocol}/original_dataset_fields.txt'
+    extracted_field_list_file_path = f'{folder}/{protocol}/{dataset_type}_dataset_fields.txt'
     shap_extracted_field_list_file_path = f'{folder}/{protocol}/shap_dataset_fields.txt'
-    split_file_paths = [f'{folder}{protocol}/original_dataset_split_{i+1}.csv' for i in range(num_of_batches)]
-    batch_file_paths = [[f'{folder}{protocol}/original_dataset_batch_{i+1}_train.csv' for i in range(num_of_batches)],
-                        [f'{folder}{protocol}/original_dataset_batch_{i+1}_test.csv' for i in range(num_of_batches)]]
-    shap_file_paths = [f'{folder}{protocol}/shap_dataset_batch_{i+1}.csv' for i in range(num_of_batches)]
+    split_file_paths = [f'{folder}{protocol}/{dataset_type}_dataset_split_{i+1}.csv' for i in range(num_of_batches)]
+    batch_file_paths = [[f'{folder}{protocol}/{dataset_type}_dataset_batch_{i+1}_train.csv' for i in range(num_of_batches)],
+                        [f'{folder}{protocol}/{dataset_type}_dataset_batch_{i+1}_test.csv' for i in range(num_of_batches)]]
+    shap_file_paths = [f'{folder}{protocol}/shap_dataset_split_{i+1}.csv' for i in range(num_of_batches)]
     filters_folder = os.path.join(os.path.dirname(__file__), "filters")
     blacklist_file_path = f'{filters_folder}/blacklist.txt'
     feature_names_file_path = f'{filters_folder}/{protocol}.txt'
@@ -223,7 +224,7 @@ if __name__ == '__main__':
         for batch_number, order_of_batch in enumerate(order_of_batches):
             log_file_path = (
                 folder + "/" + protocol + "/" +
-                ("shap" if shap_features_on else "original") + "_dataset_results" +
+                dataset_type + "_dataset_results" +
                 "_num_" + str(num_of_packets_to_process) +
                 "_mode_" + str(mode) +
                 "_clf_" + classifier_index +
@@ -234,8 +235,6 @@ if __name__ == '__main__':
 
             if os.path.exists(log_file_path):
                 os.remove(log_file_path)  # Remove previous log file
-
-            dataset_type = "shap" if shap_features_on else "original"
 
             optimization_train_file_path = batch_file_paths[0][batch_number]
             optimization_test_file_path = batch_file_paths[1][batch_number]
@@ -289,20 +288,19 @@ if __name__ == '__main__':
                 if best_solution[i] == 1:
                     selected_field_list.append(extracted_field_list[i])
 
-            selected_features_batch_paths = [
-                f'{folder}{protocol}/{dataset_type}_{mode}_dataset_batch_{batch_number+1}_train.csv',
-                f'{folder}{protocol}/{dataset_type}_{mode}_dataset_batch_{batch_number+1}_test.csv'
-            ]
-
             # Create the selected features CSV files
             columns_to_keep = selected_field_list + ['label']
+
             libraries.filter_columns(
                 f'{folder}{protocol}/{dataset_type}_dataset_batch_{order_of_batch[batch_number]}_train.csv',
-                selected_features_batch_paths[0], columns_to_keep
+                f'{folder}{protocol}/{dataset_type}_{mode}_dataset_batch_{batch_number+1}_train.csv',
+                columns_to_keep
             )
+
             libraries.filter_columns(
                 f'{folder}{protocol}/{dataset_type}_dataset_batch_{order_of_batch[batch_number]}_test.csv',
-                selected_features_batch_paths[1], columns_to_keep
+                f'{folder}{protocol}/{dataset_type}_{mode}_dataset_batch_{batch_number+1}_test.csv',
+                columns_to_keep
             )
 
             # Print the selected features

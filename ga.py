@@ -39,6 +39,7 @@ def mutate(solution, mutation_rate):
 def genetic_algorithm(pop_size, solution_size, mutation_rate, crossover_rate, optimization_train_file_path, classifier_index,
                       num_of_iterations, classes_file_path, num_of_packets_to_process, weights, log_file_path,
                       max_num_of_generations, fields_file_path, num_cores, classifiers):
+
     pre_solutions = defaultdict(float)
     
     # Load classes

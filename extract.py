@@ -316,10 +316,21 @@ def run(blacklist_check, blacklist_file_path, feature_names_file_path, protocol_
             print("adding statistical features...")
             add_stat_features_to_csv_file(all_csv_file_path)
 
+    # Run SHAP feature extraction if enabled
+    if shap_features_on:
+        if not os.path.exists(shap_csv_file_path):
+            print("running SHAP feature extraction...")
+            shap_features.run(all_csv_file_path, shap_csv_file_path, protocol_folder_path, shap_fold_size)
+
     # Check if split files exist; if not, create them
-    if not all(os.path.exists(file_path) for file_path in split_file_paths):
+    if not shap_features_on and not all(os.path.exists(file_path) for file_path in split_file_paths):
         print("creating the split files...")
         split_csv(all_csv_file_path, split_file_paths)
+
+    # Check if split files exist; if not, create them
+    if shap_features_on and not all(os.path.exists(file_path) for file_path in shap_file_paths):
+        print("generating SHAP batch files...")
+        split_csv(shap_csv_file_path, shap_file_paths)
 
     # Create batch files
     if not all(os.path.exists(file_path) for file_path in [file_path for sublist in batch_file_paths for file_path in sublist]):
@@ -346,18 +357,8 @@ def run(blacklist_check, blacklist_file_path, feature_names_file_path, protocol_
                             # Write the remaining lines
                             train_file.write(line)
 
-    # Run SHAP feature extraction if enabled
-    if shap_features_on:
-        if not os.path.exists(shap_csv_file_path):
-            print("running SHAP feature extraction...")
-            shap_features.run(all_csv_file_path, shap_csv_file_path, protocol_folder_path, shap_fold_size)
-
-    if shap_features_on and not all(os.path.exists(file_path) for file_path in shap_file_paths):
-        print("generating SHAP batch files...")
-        split_csv(shap_csv_file_path, shap_file_paths)
-
     # Write extracted field list to files if they don't exist
-    if not os.path.exists(extracted_field_list_file_path):
+    if not shap_features_on and not os.path.exists(extracted_field_list_file_path):
         print("generating feature sets...")
         write_extracted_field_list_to_file(all_csv_file_path, extracted_field_list_file_path)
 
