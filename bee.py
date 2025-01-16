@@ -19,7 +19,8 @@ def objective_function(features):
 
 # Initialize the population of solutions (bees)
 def initialize_population(pop_size, num_features):
-    return [[random.choice([0, 1]) for _ in range(num_features)] for _ in range(pop_size)]
+    # Initialize a population
+    return [[1 for _ in range(num_features)] for _ in range(pop_size)]
 
 # Select employed bees to explore new solutions
 def employed_bees_phase(population, fitness_scores, max_trials):

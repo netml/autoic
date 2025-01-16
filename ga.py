@@ -12,8 +12,8 @@ import multiprocessing
 random.seed(42)
 
 def initialize_population(pop_size, solution_size):
-    # Initialize a population of random binary solutions using list comprehension
-    return [[random.choice([0, 1]) for _ in range(solution_size)] for _ in range(pop_size)]
+    # Initialize a population
+    return [[1 for _ in range(solution_size)] for _ in range(pop_size)]
 
 def select_parents(population, fitness_scores):
     # Implement Elitism: Select parents based on fitness (roulette wheel selection)
