@@ -215,7 +215,7 @@ if __name__ == '__main__':
                 blacklist_check, blacklist_file_path, feature_names_file_path, protocol_folder_path, split_file_paths,
                 pcap_file_names, pcap_file_paths, classes_file_path, extracted_field_list_file_path,
                 statistical_features_on, tshark_filter,
-                f'{folder}{protocol}/original_dataset.csv', batch_file_paths, num_of_batches
+                f'{folder}{protocol}/original_dataset.csv', batch_file_paths, num_of_batches, num_cores
             )
         else:
             extract.shap(

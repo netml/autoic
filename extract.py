@@ -12,6 +12,11 @@ import os
 import libraries
 import shap_features
 import shutil
+from concurrent.futures import ThreadPoolExecutor
+from threading import Lock
+
+# Define a lock for synchronizing file writes
+file_write_lock = Lock()
 
 def read_blacklisted_features(blacklist_check, blacklist_file_path):
     if blacklist_check:
@@ -254,9 +259,9 @@ def replace_csv_file(all_csv_file_path, shap_csv_file_path):
     
     shutil.move(shap_csv_file_path, all_csv_file_path)
 
-def create_batch_files(num_of_batches, split_file_paths, batch_file_paths, libraries):
+def create_batch_files(num_of_batches, split_file_paths, batch_file_paths):
     if not all(os.path.exists(file_path) for file_path in [file_path for sublist in batch_file_paths for file_path in sublist]):
-        print("Creating the batch files...")
+        print("creating the batch files...")
         # Create test files
         for i in range(num_of_batches):
             # Create test files
@@ -279,9 +284,33 @@ def create_batch_files(num_of_batches, split_file_paths, batch_file_paths, libra
                             # Write the remaining lines
                             train_file.write(line)
 
+def process_pcap(class_counter, pcap_file_name, pcap_file_path, all_csv_file_path, csv_header, tshark_filter):
+    print(f"processing {pcap_file_name}...")
+
+    # Prepare the tshark command
+    tshark_cmd = ['tshark', '-n', '-r', pcap_file_path, '-T', 'fields']
+    if tshark_filter:
+        tshark_cmd.extend(['-Y', tshark_filter])
+    for feature in csv_header[:-1]:
+        tshark_cmd.extend(['-e', feature])
+    tshark_cmd.extend(['-E', 'separator=/t'])
+
+    # Process tshark output line by line
+    with subprocess.Popen(tshark_cmd, stdout=subprocess.PIPE, text=True) as proc:
+        for line in proc.stdout:
+            fields = line.split('\t')
+            if len(fields) == len(csv_header) - 1:
+                if not all(entry == "" for entry in fields):  # Filter NaN values
+                    fields = modify_dataset(fields)
+                    fields.append(str(class_counter))
+                    # Acquire the lock and write to the file
+                    with file_write_lock:
+                        with open(all_csv_file_path, 'a') as file:
+                            file.write(','.join(fields) + '\n')
+
 def original(blacklist_check, blacklist_file_path, feature_names_file_path, protocol_folder_path, split_file_paths,
         pcap_file_names, pcap_file_paths, classes_file_path, extracted_field_list_file_path,
-        statistical_features_on, tshark_filter, all_csv_file_path, batch_file_paths, num_of_batches):
+        statistical_features_on, tshark_filter, all_csv_file_path, batch_file_paths, num_of_batches, num_cores):
 
     # Create protocol folder if it doesn't exist
     if not os.path.exists(protocol_folder_path):
@@ -300,35 +329,19 @@ def original(blacklist_check, blacklist_file_path, feature_names_file_path, prot
         # Write header rows to CSV file
         write_header_to_csv_file(all_csv_file_path, csv_header)
 
-        # List of classes (dict)
-        list_of_classes = {}
-
         # Loop through each PCAP file
-        max_length = max(len(pcap_file_name) for pcap_file_name in pcap_file_names) + (len(pcap_file_names) * 2) + 7
-        for class_counter, pcap_file_name in enumerate(pcap_file_names):
-            class_name = pcap_file_name.split('.pcap')[0]
-            list_of_classes[class_counter] = class_name
-            pcap_file_path = pcap_file_paths[class_counter]
-            print(f"{'[' + str(class_counter+1) + '/' + str(len(pcap_file_names)) + '] ' + pcap_file_name + '...':<{max_length}}\r", end='')
+        with ThreadPoolExecutor(max_workers=num_cores) as executor:
+            futures = []
+            for class_counter, pcap_file_name in enumerate(pcap_file_names):
+                pcap_file_path = pcap_file_paths[class_counter]
+                futures.append(executor.submit(
+                    process_pcap, class_counter, pcap_file_name, pcap_file_path, all_csv_file_path, csv_header,
+                    tshark_filter
+                ))
 
-            # Prepare the tshark command
-            tshark_cmd = ['tshark', '-n', '-r', pcap_file_path, '-T', 'fields']
-            if tshark_filter:
-                tshark_cmd.extend(['-Y', tshark_filter])
-            for feature in csv_header[:-1]:
-                tshark_cmd.extend(['-e', feature])
-            tshark_cmd.extend(['-E', 'separator=/t'])
-
-            # Process tshark output line by line
-            with open(all_csv_file_path, 'a') as file:
-                with subprocess.Popen(tshark_cmd, stdout=subprocess.PIPE, text=True) as proc:
-                    for line in proc.stdout:
-                        fields = line.split('\t')
-                        if len(fields) == len(csv_header) - 1:
-                            if not all(entry == "" for entry in fields):  # Filter NaN values
-                                fields = modify_dataset(fields)
-                                fields.append(str(class_counter))
-                                file.write(','.join(fields) + '\n')
+            # Wait for all tasks to complete
+            for future in futures:
+                future.result()
 
         print("removing redundant fields...")
         remove_empty_columns_from_csv_file(all_csv_file_path)
@@ -346,7 +359,7 @@ def original(blacklist_check, blacklist_file_path, feature_names_file_path, prot
         split_csv(all_csv_file_path, split_file_paths)
 
     # Create batch files
-    create_batch_files(num_of_batches, split_file_paths, batch_file_paths, libraries)
+    create_batch_files(num_of_batches, split_file_paths, batch_file_paths)
 
     # Write extracted field list to files if they don't exist
     if not os.path.exists(extracted_field_list_file_path):
@@ -385,7 +398,7 @@ def shap(protocol_folder_path, split_file_paths, extracted_field_list_file_path,
         split_csv(shap_csv_file_path, split_file_paths)
 
     # Create batch files
-    create_batch_files(num_of_batches, split_file_paths, batch_file_paths, libraries)
+    create_batch_files(num_of_batches, split_file_paths, batch_file_paths)
 
     # Write extracted field list to files if they don't exist
     if not os.path.exists(extracted_field_list_file_path):
