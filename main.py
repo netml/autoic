@@ -1,4 +1,3 @@
-# verify the validation checks after the user providing the features
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC, LinearSVC
@@ -210,19 +209,19 @@ if __name__ == '__main__':
 
     # Run the mode
     if mode == 'extract':
-        if not shap_features_on:
-            extract.original(
-                blacklist_check, blacklist_file_path, feature_names_file_path, protocol_folder_path, split_file_paths,
-                pcap_file_names, pcap_file_paths, classes_file_path, extracted_field_list_file_path,
-                statistical_features_on, tshark_filter,
-                f'{folder}{protocol}/original_dataset.csv', batch_file_paths, num_of_batches, num_cores
-            )
-        else:
+        if shap_features_on:
             extract.shap(
                 protocol_folder_path, split_file_paths, extracted_field_list_file_path,
                 f'{folder}{protocol}/original_dataset.csv',
                 f'{folder}{protocol}/original_shap_dataset.csv', shap_fold_size, batch_file_paths,
                 num_of_batches
+            )
+        else:
+            extract.original(
+                blacklist_check, blacklist_file_path, feature_names_file_path, protocol_folder_path, split_file_paths,
+                pcap_file_names, pcap_file_paths, classes_file_path, extracted_field_list_file_path,
+                statistical_features_on, tshark_filter,
+                f'{folder}{protocol}/original_dataset.csv', batch_file_paths, num_of_batches, num_cores
             )
         print("done...")
     elif mode == 'ga' or mode == 'aco' or mode == 'abc':
@@ -323,6 +322,6 @@ if __name__ == '__main__':
             ml.classify_after_filtering(best_solution, optimization_train_file_path, optimization_test_file_path,
                                         int(classifier_index), log_file_path, classifiers, False)
     elif mode == 'report':
-        report.run(folder + protocol, classifiers, classifier_index)
+        report.run(folder + protocol, classifiers, classifier_index, dataset_type, num_of_packets_to_process)
     else:
         print("Unknown entry for the mode!")

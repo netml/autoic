@@ -59,6 +59,7 @@ def genetic_algorithm(pop_size, solution_size, mutation_rate, crossover_rate, op
 
     log("", log_file_path)
 
+    fitness_scores = []
     population = initialize_population(pop_size, solution_size)
     best_solution = None
     best_fitness = -math.inf
