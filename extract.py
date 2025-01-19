@@ -254,10 +254,34 @@ def replace_csv_file(all_csv_file_path, shap_csv_file_path):
     
     shutil.move(shap_csv_file_path, all_csv_file_path)
 
-def run(blacklist_check, blacklist_file_path, feature_names_file_path, protocol_folder_path, split_file_paths,
-        shap_file_paths, pcap_file_names, pcap_file_paths, classes_file_path, extracted_field_list_file_path,
-        shap_extracted_field_list_file_path, statistical_features_on, tshark_filter,
-        all_csv_file_path, shap_csv_file_path, shap_fold_size, shap_features_on, batch_file_paths, num_of_batches):
+def create_batch_files(num_of_batches, split_file_paths, batch_file_paths, libraries):
+    if not all(os.path.exists(file_path) for file_path in [file_path for sublist in batch_file_paths for file_path in sublist]):
+        print("Creating the batch files...")
+        # Create test files
+        for i in range(num_of_batches):
+            # Create test files
+            libraries.copy_file(split_file_paths[i], batch_file_paths[1][i])
+
+            # Create train files
+            train_files = [file_path for j, file_path in enumerate(split_file_paths) if j != i]
+            header_written = False
+
+            with open(batch_file_paths[0][i], 'w') as train_file:
+                for file_path in train_files:
+                    with open(file_path, 'r') as file:
+                        for line_num, line in enumerate(file):
+                            # Write header only once
+                            if line_num == 0:
+                                if not header_written:
+                                    train_file.write(line)
+                                    header_written = True
+                                continue
+                            # Write the remaining lines
+                            train_file.write(line)
+
+def original(blacklist_check, blacklist_file_path, feature_names_file_path, protocol_folder_path, split_file_paths,
+        pcap_file_names, pcap_file_paths, classes_file_path, extracted_field_list_file_path,
+        statistical_features_on, tshark_filter, all_csv_file_path, batch_file_paths, num_of_batches):
 
     # Create protocol folder if it doesn't exist
     if not os.path.exists(protocol_folder_path):
@@ -316,54 +340,18 @@ def run(blacklist_check, blacklist_file_path, feature_names_file_path, protocol_
             print("adding statistical features...")
             add_stat_features_to_csv_file(all_csv_file_path)
 
-    # Run SHAP feature extraction if enabled
-    if shap_features_on:
-        if not os.path.exists(shap_csv_file_path):
-            print("running SHAP feature extraction...")
-            shap_features.run(all_csv_file_path, shap_csv_file_path, protocol_folder_path, shap_fold_size)
-
     # Check if split files exist; if not, create them
-    if not shap_features_on and not all(os.path.exists(file_path) for file_path in split_file_paths):
+    if not all(os.path.exists(file_path) for file_path in split_file_paths):
         print("creating the split files...")
         split_csv(all_csv_file_path, split_file_paths)
 
-    # Check if split files exist; if not, create them
-    if shap_features_on and not all(os.path.exists(file_path) for file_path in shap_file_paths):
-        print("generating SHAP batch files...")
-        split_csv(shap_csv_file_path, shap_file_paths)
-
     # Create batch files
-    if not all(os.path.exists(file_path) for file_path in [file_path for sublist in batch_file_paths for file_path in sublist]):
-        print("creating the batch files...")
-        # Create test files
-        for i in range(num_of_batches):
-            # Create test files
-            libraries.copy_file(split_file_paths[i], batch_file_paths[1][i])
-
-            # Create train files
-            train_files = [file_path for j, file_path in enumerate(split_file_paths) if j != i]
-            header_written = False
-
-            with open(batch_file_paths[0][i], 'w') as train_file:
-                for file_path in train_files:
-                    with open(file_path, 'r') as file:
-                        for line_num, line in enumerate(file):
-                            # Write header only once
-                            if line_num == 0:
-                                if not header_written:
-                                    train_file.write(line)
-                                    header_written = True
-                                continue
-                            # Write the remaining lines
-                            train_file.write(line)
+    create_batch_files(num_of_batches, split_file_paths, batch_file_paths, libraries)
 
     # Write extracted field list to files if they don't exist
-    if not shap_features_on and not os.path.exists(extracted_field_list_file_path):
+    if not os.path.exists(extracted_field_list_file_path):
         print("generating feature sets...")
         write_extracted_field_list_to_file(all_csv_file_path, extracted_field_list_file_path)
-
-    if shap_features_on and not os.path.exists(shap_extracted_field_list_file_path):
-        write_extracted_field_list_to_file(shap_csv_file_path, shap_extracted_field_list_file_path)
 
     # Write classes JSON file if it doesn't exist
     if not os.path.exists(classes_file_path):
@@ -372,3 +360,33 @@ def run(blacklist_check, blacklist_file_path, feature_names_file_path, protocol_
         json_data = json.dumps(list_of_classes, ensure_ascii=False)  # Convert list_of_classes to JSON string
         with open(classes_file_path, 'w', encoding='utf-8') as json_file:
             json_file.write(json_data)
+
+def shap(protocol_folder_path, split_file_paths, extracted_field_list_file_path, all_csv_file_path, shap_csv_file_path,
+         shap_fold_size, batch_file_paths, num_of_batches):
+
+    # Check if the protocol folder exists
+    if not os.path.exists(protocol_folder_path):
+        print("The protocol folder does not exist.")
+        sys.exit(1)
+
+    # Check if the main CSV file exists
+    if not os.path.exists(all_csv_file_path):
+        print("The main CSV file does not exist.")
+        sys.exit(1)
+
+    # Run SHAP feature extraction if enabled
+    if not os.path.exists(shap_csv_file_path):
+        print("running SHAP feature extraction...")
+        shap_features.run(all_csv_file_path, shap_csv_file_path, protocol_folder_path, shap_fold_size)
+
+    # Check if split files exist; if not, create them
+    if not all(os.path.exists(file_path) for file_path in split_file_paths):
+        print("generating SHAP batch files...")
+        split_csv(shap_csv_file_path, split_file_paths)
+
+    # Create batch files
+    create_batch_files(num_of_batches, split_file_paths, batch_file_paths, libraries)
+
+    # Write extracted field list to files if they don't exist
+    if not os.path.exists(extracted_field_list_file_path):
+        write_extracted_field_list_to_file(shap_csv_file_path, extracted_field_list_file_path)
