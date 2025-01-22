@@ -63,7 +63,7 @@ def load_csv_and_filter(classes, fitness_function_file_path, n, log_file_path, f
     packets_2.append(header)
 
     for i in range(len(classes)):
-        log(f"Reading from {classes[str(i)]}...", log_file_path)
+        log(f"reading from {classes[str(i)]}...", log_file_path)
 
         try:
             with open(fitness_function_file_path, 'r', newline='') as csv_file:

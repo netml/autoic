@@ -115,7 +115,7 @@ if __name__ == '__main__':
             if index + 1 >= len(sys.argv):
                 print("Missing value for -f/--folder option")
                 sys.exit(1)
-            folder = libraries.fix_trailing_character(sys.argv[index + 1])
+            folder = sys.argv[index + 1].rstrip('/')
             index += 2  # Skip both the option and its value
         elif sys.argv[index] in ('-r', '--run-number'):
             if index + 1 >= len(sys.argv):
@@ -179,19 +179,19 @@ if __name__ == '__main__':
 
     # Set parameters
     dataset_type = "original_shap" if shap_features_on else "original"
-    pcap_folder_path = folder + "pcap"
+    pcap_folder_path = folder + "/" + "pcap"
     classes_file_path = f'{folder}/{protocol}/classes.json'
     extracted_field_list_file_path = f"{folder}/{protocol}/{dataset_type}_dataset_fields.txt"
-    split_file_paths = [f"{folder}{protocol}/{dataset_type}_dataset_split_{i+1}.csv" for i in range(num_of_batches)]
-    batch_file_paths = [[f"{folder}{protocol}/{dataset_type}_dataset_batch_{i+1}_train.csv" for i in range(num_of_batches)],
-                        [f"{folder}{protocol}/{dataset_type}_dataset_batch_{i+1}_test.csv" for i in range(num_of_batches)]]
+    split_file_paths = [f"{folder}/{protocol}/{dataset_type}_dataset_split_{i+1}.csv" for i in range(num_of_batches)]
+    batch_file_paths = [[f"{folder}/{protocol}/{dataset_type}_dataset_batch_{i+1}_train.csv" for i in range(num_of_batches)],
+                        [f"{folder}/{protocol}/{dataset_type}_dataset_batch_{i+1}_test.csv" for i in range(num_of_batches)]]
     filters_folder = os.path.join(os.path.dirname(__file__), "filters")
     blacklist_file_path = f'{filters_folder}/blacklist.txt'
     feature_names_file_path = f'{filters_folder}/{protocol}.txt'
-    protocol_folder_path = f'{folder}{protocol}'
+    protocol_folder_path = f'{folder}/{protocol}'
     if mode == 'extract':
         pcap_file_names = sorted([f for f in os.listdir(pcap_folder_path) if f.endswith('.pcap')])
-        pcap_file_paths = [folder + "pcap/" + file_name for file_name in pcap_file_names]
+        pcap_file_paths = [folder + "/" + "pcap/" + file_name for file_name in pcap_file_names]
     order_of_batches = libraries.generate_specific_combinations(num_of_batches)
 
     # Validation checks
@@ -212,8 +212,8 @@ if __name__ == '__main__':
         if shap_features_on:
             extract.shap(
                 protocol_folder_path, split_file_paths, extracted_field_list_file_path,
-                f'{folder}{protocol}/original_dataset.csv',
-                f'{folder}{protocol}/original_shap_dataset.csv', shap_fold_size, batch_file_paths,
+                f'{folder}/{protocol}/original_dataset.csv',
+                f'{folder}/{protocol}/original_shap_dataset.csv', shap_fold_size, batch_file_paths,
                 num_of_batches
             )
         else:
@@ -221,7 +221,7 @@ if __name__ == '__main__':
                 blacklist_check, blacklist_file_path, feature_names_file_path, protocol_folder_path, split_file_paths,
                 pcap_file_names, pcap_file_paths, classes_file_path, extracted_field_list_file_path,
                 statistical_features_on, tshark_filter,
-                f'{folder}{protocol}/original_dataset.csv', batch_file_paths, num_of_batches, num_cores
+                f'{folder}/{protocol}/original_dataset.csv', batch_file_paths, num_of_batches, num_cores
             )
         print("done...")
     elif mode == 'ga' or mode == 'aco' or mode == 'abc':
@@ -295,14 +295,14 @@ if __name__ == '__main__':
             columns_to_keep = selected_field_list + ['label']
 
             libraries.filter_columns(
-                f'{folder}{protocol}/{dataset_type}_dataset_batch_{order_of_batch[batch_number]}_train.csv',
-                f'{folder}{protocol}/{dataset_type}_{mode}_dataset_batch_{batch_number+1}_train.csv',
+                f'{folder}/{protocol}/{dataset_type}_dataset_batch_{order_of_batch[batch_number]}_train.csv',
+                f'{folder}/{protocol}/{dataset_type}_{mode}_dataset_batch_{batch_number+1}_train.csv',
                 columns_to_keep
             )
 
             libraries.filter_columns(
-                f'{folder}{protocol}/{dataset_type}_dataset_batch_{order_of_batch[batch_number]}_test.csv',
-                f'{folder}{protocol}/{dataset_type}_{mode}_dataset_batch_{batch_number+1}_test.csv',
+                f'{folder}/{protocol}/{dataset_type}_dataset_batch_{order_of_batch[batch_number]}_test.csv',
+                f'{folder}/{protocol}/{dataset_type}_{mode}_dataset_batch_{batch_number+1}_test.csv',
                 columns_to_keep
             )
 
@@ -322,6 +322,6 @@ if __name__ == '__main__':
             ml.classify_after_filtering(best_solution, optimization_train_file_path, optimization_test_file_path,
                                         int(classifier_index), log_file_path, classifiers, False)
     elif mode == 'report':
-        report.run(folder + protocol, classifiers, classifier_index, dataset_type, num_of_packets_to_process)
+        report.run(folder + "/" + protocol, classifiers, classifier_index, dataset_type, num_of_packets_to_process)
     else:
         print("Unknown entry for the mode!")
