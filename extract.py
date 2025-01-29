@@ -261,7 +261,6 @@ def replace_csv_file(all_csv_file_path, shap_csv_file_path):
 
 def create_batch_files(num_of_batches, split_file_paths, batch_file_paths):
     if not all(os.path.exists(file_path) for file_path in [file_path for sublist in batch_file_paths for file_path in sublist]):
-        print("creating the batch files...")
         # Create test files
         for i in range(num_of_batches):
             # Create test files
@@ -359,7 +358,9 @@ def original(blacklist_check, blacklist_file_path, feature_names_file_path, prot
         split_csv(all_csv_file_path, split_file_paths)
 
     # Create batch files
-    create_batch_files(num_of_batches, split_file_paths, batch_file_paths)
+    if not all(os.path.exists(file_path) for file_path in batch_file_paths[0]) or not all(os.path.exists(file_path) for file_path in batch_file_paths[1]):
+        print("creating the batch files...")
+        create_batch_files(num_of_batches, split_file_paths, batch_file_paths)
 
     # Write extracted field list to files if they don't exist
     if not os.path.exists(extracted_field_list_file_path):
@@ -394,11 +395,13 @@ def shap(protocol_folder_path, split_file_paths, extracted_field_list_file_path,
 
     # Check if split files exist; if not, create them
     if not all(os.path.exists(file_path) for file_path in split_file_paths):
-        print("generating SHAP batch files...")
+        print("generating SHAP split files...")
         split_csv(shap_csv_file_path, split_file_paths)
 
     # Create batch files
-    create_batch_files(num_of_batches, split_file_paths, batch_file_paths)
+    if not all(os.path.exists(file_path) for file_path in batch_file_paths[0]) or not all(os.path.exists(file_path) for file_path in batch_file_paths[1]):
+        print("creating the batch files...")
+        create_batch_files(num_of_batches, split_file_paths, batch_file_paths)
 
     # Write extracted field list to files if they don't exist
     if not os.path.exists(extracted_field_list_file_path):
