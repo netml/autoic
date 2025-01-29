@@ -390,17 +390,17 @@ def shap(protocol_folder_path, split_file_paths, extracted_field_list_file_path,
 
     # Run SHAP feature extraction if enabled
     if not os.path.exists(shap_csv_file_path):
-        print("running SHAP feature extraction...")
+        print("running the SHAP feature extraction...")
         shap_features.run(all_csv_file_path, shap_csv_file_path, protocol_folder_path, shap_fold_size)
 
     # Check if split files exist; if not, create them
     if not all(os.path.exists(file_path) for file_path in split_file_paths):
-        print("generating SHAP split files...")
+        print("generating the SHAP split files...")
         split_csv(shap_csv_file_path, split_file_paths)
 
     # Create batch files
     if not all(os.path.exists(file_path) for file_path in batch_file_paths[0]) or not all(os.path.exists(file_path) for file_path in batch_file_paths[1]):
-        print("creating the batch files...")
+        print("creating the SHAP batch files...")
         create_batch_files(num_of_batches, split_file_paths, batch_file_paths)
 
     # Write extracted field list to files if they don't exist
