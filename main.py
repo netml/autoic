@@ -161,37 +161,53 @@ if __name__ == '__main__':
             sys.exit(1)
 
     # Validation checks
-    required_params = {
-        "folder": folder,
-        "protocol": protocol,
-        "mode": mode,
-    }
 
     # Include classifier_index only if the mode requires it
     if mode in ['ga', 'aco', 'abc']:
-        required_params["classifier_index"] = classifier_index # Include classifier_index
-
-    # Check for required parameters
-    for param, value in required_params.items():
-        if not value:
-            print(f"Missing required parameter: {param}")
+        if not classifier_index:
+            print("Classifier index is required for GA, ACO, and ABC modes.")
             sys.exit(1)
 
+    # Check for required parameters
+    if not folder or not protocol or not mode:
+        print("Missing required parameters: folder, protocol, or mode")
+        sys.exit(1)
+
     # Set parameters
-    dataset_type = "original_shap" if shap_features_on else "original"
     pcap_folder_path = folder + "/" + "pcap"
     classes_file_path = f'{folder}/{protocol}/classes.json'
-    extracted_field_list_file_path = f"{folder}/{protocol}/{dataset_type}_dataset_fields.txt"
-    split_file_paths = [f"{folder}/{protocol}/{dataset_type}_dataset_split_{i+1}.csv" for i in range(num_of_batches)]
-    batch_file_paths = [[f"{folder}/{protocol}/{dataset_type}_dataset_batch_{i+1}_train.csv" for i in range(num_of_batches)],
-                        [f"{folder}/{protocol}/{dataset_type}_dataset_batch_{i+1}_test.csv" for i in range(num_of_batches)]]
+
+    # Define field paths for each mode
+    original_extracted_field_list_file_path = f"{folder}/{protocol}/original_dataset_fields.txt"
+    original_shap_extracted_field_list_file_path = [f"{folder}/{protocol}/original_shap_dataset_batch_{i}_fields.txt" for i in range(1, num_of_batches + 1)]
+
+    # Define file paths for the dataset
+    all_csv_file_path = f'{folder}/{protocol}/original_dataset.csv'
+    shap_all_csv_files = [f"{folder}/{protocol}/original_shap_dataset_batch_{i}.csv" for i in range(1, num_of_batches + 1)]
+
+    # Define batch file paths
+    original_split_file_paths = [f"{folder}/{protocol}/original_dataset_split_{i+1}.csv" for i in range(num_of_batches)]
+    original_shap_split_file_paths = [[f"{folder}/{protocol}/original_shap_dataset_batch_{j+1}_split_{i+1}.csv" for i in range(num_of_batches)] for j in range(num_of_batches)]
+
+    # Define batch file paths for optimization
+    original_batch_file_paths = [
+        [f"{folder}/{protocol}/original_dataset_batch_{i+1}_train.csv" for i in range(num_of_batches)],
+        [f"{folder}/{protocol}/original_dataset_batch_{i+1}_test.csv" for i in range(num_of_batches)]
+    ]
+    original_shap_batch_file_paths = [
+        [f"{folder}/{protocol}/original_shap_dataset_batch_{i+1}_train.csv" for i in range(num_of_batches)],
+        [f"{folder}/{protocol}/original_shap_dataset_batch_{i+1}_test.csv" for i in range(num_of_batches)]
+    ]
+
     filters_folder = os.path.join(os.path.dirname(__file__), "filters")
     blacklist_file_path = f'{filters_folder}/blacklist.txt'
     feature_names_file_path = f'{filters_folder}/{protocol}.txt'
     protocol_folder_path = f'{folder}/{protocol}'
+
     if mode == 'extract':
         pcap_file_names = sorted([f for f in os.listdir(pcap_folder_path) if f.endswith('.pcap')])
         pcap_file_paths = [folder + "/" + "pcap/" + file_name for file_name in pcap_file_names]
+
     order_of_batches = libraries.generate_specific_combinations(num_of_batches)
 
     # Validation checks
@@ -211,37 +227,37 @@ if __name__ == '__main__':
     if mode == 'extract':
         if shap_features_on:
             extract.shap(
-                protocol_folder_path, split_file_paths, extracted_field_list_file_path,
-                f'{folder}/{protocol}/original_dataset.csv',
-                f'{folder}/{protocol}/original_shap_dataset.csv', shap_fold_size, batch_file_paths,
-                num_of_batches
+                protocol_folder_path, original_split_file_paths, original_shap_split_file_paths,
+                all_csv_file_path,
+                original_shap_batch_file_paths, num_of_batches,
+                original_shap_extracted_field_list_file_path, shap_all_csv_files
             )
         else:
             extract.original(
-                blacklist_check, blacklist_file_path, feature_names_file_path, protocol_folder_path, split_file_paths,
-                pcap_file_names, pcap_file_paths, classes_file_path, extracted_field_list_file_path,
-                statistical_features_on, tshark_filter,
-                f'{folder}/{protocol}/original_dataset.csv', batch_file_paths, num_of_batches, num_cores
+                blacklist_check, blacklist_file_path, feature_names_file_path, protocol_folder_path, original_split_file_paths,
+                pcap_file_names, pcap_file_paths, classes_file_path, original_extracted_field_list_file_path,
+                statistical_features_on, tshark_filter, all_csv_file_path,
+                original_batch_file_paths, num_of_batches, num_cores
             )
         print("done...")
     elif mode == 'ga' or mode == 'aco' or mode == 'abc':
         for batch_number, order_of_batch in enumerate(order_of_batches):
             log_file_path = (
-                folder + "/" + protocol + "/" +
-                dataset_type + "_dataset_results" +
+                folder + "/" + protocol + "/" + "original" +
+                ("_shap" if shap_features_on else "") +
+                "_dataset_results" +
                 "_num_" + str(num_of_packets_to_process) +
                 "_mode_" + str(mode) +
                 "_clf_" + classifier_index +
                 "_batch_" + str(batch_number + 1) +
-                "_run_" + str(run_number) +
-                ".txt"
+                "_run_" + str(run_number) + ".txt"
             )
 
             if os.path.exists(log_file_path):
                 os.remove(log_file_path)  # Remove previous log file
 
-            optimization_train_file_path = batch_file_paths[0][batch_number]
-            optimization_test_file_path = batch_file_paths[1][batch_number]
+            optimization_train_file_path = original_batch_file_paths[0][batch_number] if not shap_features_on else original_shap_batch_file_paths[0][batch_number]
+            optimization_test_file_path = original_batch_file_paths[1][batch_number] if not shap_features_on else original_shap_batch_file_paths[1][batch_number]
 
             best_solution = None
             best_fitness = 0
@@ -249,35 +265,32 @@ if __name__ == '__main__':
             if mode == 'ga':
                 log("running GA...\n", log_file_path)
                 best_solution, best_fitness = ga.run(
-                    optimization_train_file_path, int(classifier_index), classes_file_path,
-                    num_of_packets_to_process, num_of_iterations, weights,
-                    log_file_path, max_num_of_generations,
-                    extracted_field_list_file_path,
+                    optimization_train_file_path, int(classifier_index), classes_file_path, num_of_packets_to_process,
+                    num_of_iterations, weights, log_file_path, max_num_of_generations,
+                    original_extracted_field_list_file_path if not shap_features_on else original_shap_extracted_field_list_file_path[batch_number],
                     num_cores, classifiers
                 )
             elif mode == 'aco':
                 log("running ACO...\n", log_file_path)
                 best_solution, best_fitness = aco.run(
-                    optimization_train_file_path, int(classifier_index), classes_file_path,
-                    num_of_packets_to_process, num_of_iterations, weights,
-                    log_file_path, max_num_of_generations,
-                    extracted_field_list_file_path,
+                    optimization_train_file_path, int(classifier_index), classes_file_path, num_of_packets_to_process,
+                    num_of_iterations, weights, log_file_path, max_num_of_generations,
+                    original_extracted_field_list_file_path if not shap_features_on else original_shap_extracted_field_list_file_path[batch_number],
                     num_cores, classifiers
                 )
             elif mode == 'abc':
                 log("running ABC...\n", log_file_path)
                 best_solution, best_fitness = bee.run(
-                    optimization_train_file_path, int(classifier_index), classes_file_path,
-                    num_of_packets_to_process, num_of_iterations, weights,
-                    log_file_path, max_num_of_generations,
-                    extracted_field_list_file_path,
+                    optimization_train_file_path, int(classifier_index), classes_file_path, num_of_packets_to_process,
+                    num_of_iterations, weights, log_file_path, max_num_of_generations,
+                    original_extracted_field_list_file_path if not shap_features_on else original_shap_extracted_field_list_file_path[batch_number],
                     num_cores, classifiers
                 )
 
             # Read the extracted field list
             extracted_field_list = []
-            if os.path.exists(extracted_field_list_file_path):
-                with open(extracted_field_list_file_path, 'r') as file:
+            if os.path.exists(original_extracted_field_list_file_path if not shap_features_on else original_shap_extracted_field_list_file_path[batch_number]):
+                with open(original_extracted_field_list_file_path if not shap_features_on else original_shap_extracted_field_list_file_path[batch_number], 'r') as file:
                     extracted_field_list = [line.strip() for line in file.readlines()]
 
             # Print best solution and the features selected
@@ -294,15 +307,17 @@ if __name__ == '__main__':
             # Create the selected features CSV files
             columns_to_keep = selected_field_list + ['label']
 
+            # Filter the original dataset to keep only the selected features
             libraries.filter_columns(
-                f'{folder}/{protocol}/{dataset_type}_dataset_batch_{order_of_batch[batch_number]}_train.csv',
-                f'{folder}/{protocol}/{dataset_type}_{mode}_dataset_batch_{batch_number+1}_train.csv',
+                f'{folder}/{protocol}/original{("_shap" if shap_features_on else "")}_dataset_batch_{batch_number+1}_train.csv',
+                f'{folder}/{protocol}/original{("_shap" if shap_features_on else "")}_{mode}_dataset_batch_{batch_number+1}_train.csv',
                 columns_to_keep
             )
 
+            # Filter the original dataset to keep only the selected features for test data
             libraries.filter_columns(
-                f'{folder}/{protocol}/{dataset_type}_dataset_batch_{order_of_batch[batch_number]}_test.csv',
-                f'{folder}/{protocol}/{dataset_type}_{mode}_dataset_batch_{batch_number+1}_test.csv',
+                f'{folder}/{protocol}/original{("_shap" if shap_features_on else "")}_dataset_batch_{batch_number+1}_test.csv',
+                f'{folder}/{protocol}/original{("_shap" if shap_features_on else "")}_{mode}_dataset_batch_{batch_number+1}_test.csv',
                 columns_to_keep
             )
 

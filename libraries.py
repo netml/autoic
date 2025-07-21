@@ -58,7 +58,7 @@ def filter_columns(input_csv, output_csv, columns_to_keep, chunk_size=10000):
 
 def print_usage():
     message = textwrap.dedent("""\
-    Usage: python3 autoic [OPTIONS]
+    Usage: python3 main.py [OPTIONS]
 
     Options:
 

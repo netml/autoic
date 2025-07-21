@@ -1,14 +1,13 @@
 from collections import defaultdict
-import hashlib
-import tempfile
 import pandas as pd
+import tempfile
+import hashlib
 import subprocess
 import csv
 import sys
 import re
 import json
 import statistics
-import os
 import libraries
 import shap_features
 import shutil
@@ -161,6 +160,38 @@ def convert_token(token):
     else:
         return -1.0
 
+def keep_selected_features_from_csv_file(input_csv_path, output_csv_path, features_to_keep, chunk_size=10000):
+    """
+    Efficiently filters a large CSV file to keep only specified features and the 'label' column,
+    preserving the order of features as specified in features_to_keep.
+    """
+
+    # Read the first chunk to determine the column structure
+    first_chunk = pd.read_csv(input_csv_path, nrows=1)
+    label_column = first_chunk.columns[-1]  # Assuming label is the last column
+
+    # Build final column list, preserving order from features_to_keep
+    final_columns = [col for col in features_to_keep if col in first_chunk.columns]
+    if label_column not in final_columns:
+        final_columns.append(label_column)
+
+    # Write to a temp file first
+    with tempfile.NamedTemporaryFile(mode='w', delete=False) as temp_file:
+        temp_file_path = temp_file.name
+
+    is_first_chunk = True
+
+    for chunk in pd.read_csv(input_csv_path, chunksize=chunk_size, low_memory=False):
+        # Filter and reorder columns
+        available_columns = [col for col in final_columns if col in chunk.columns]
+        filtered_chunk = chunk[available_columns]
+
+        filtered_chunk.to_csv(temp_file_path, mode='a', index=False, header=is_first_chunk)
+        is_first_chunk = False
+
+    # Move temp file to final destination
+    os.replace(temp_file_path, output_csv_path)
+
 def modify_dataset(fields):
     for i, cell in enumerate(fields):
         if cell:
@@ -259,18 +290,46 @@ def replace_csv_file(all_csv_file_path, shap_csv_file_path):
     
     shutil.move(shap_csv_file_path, all_csv_file_path)
 
+import os
+
+def create_batch_files_shap(num_of_batches, split_file_paths, batch_file_paths):
+    if not all(os.path.exists(file_path) for file_path in [file_path for sublist in batch_file_paths for file_path in sublist]):
+        for i in range(num_of_batches):
+            # Test file is at split_file_paths[i][i], saved to batch_file_paths[1][i]
+            test_source = split_file_paths[i][i]
+            test_target = batch_file_paths[1][i]
+            libraries.copy_file(test_source, test_target)
+
+            # Create train files from all other files in split_file_paths[i]
+            train_files = [file_path for j, file_path in enumerate(split_file_paths[i]) if j != i]
+            train_target = batch_file_paths[0][i]
+
+            header_written = False
+            with open(train_target, 'w') as train_file:
+                for file_path in train_files:
+                    with open(file_path, 'r') as file:
+                        for line_num, line in enumerate(file):
+                            if line_num == 0:
+                                if not header_written:
+                                    train_file.write(line)
+                                    header_written = True
+                                continue
+                            train_file.write(line)
+
 def create_batch_files(num_of_batches, split_file_paths, batch_file_paths):
     if not all(os.path.exists(file_path) for file_path in [file_path for sublist in batch_file_paths for file_path in sublist]):
-        # Create test files
         for i in range(num_of_batches):
-            # Create test files
-            libraries.copy_file(split_file_paths[i], batch_file_paths[1][i])
+            # Test file is at split_file_paths[i], saved to batch_file_paths[1][i]
+            test_source = split_file_paths[i]
+            test_target = batch_file_paths[1][i]
+            libraries.copy_file(test_source, test_target)
 
             # Create train files
             train_files = [file_path for j, file_path in enumerate(split_file_paths) if j != i]
-            header_written = False
+            train_target = batch_file_paths[0][i]
 
-            with open(batch_file_paths[0][i], 'w') as train_file:
+            header_written = False
+            with open(train_target, 'w') as train_file:
                 for file_path in train_files:
                     with open(file_path, 'r') as file:
                         for line_num, line in enumerate(file):
@@ -307,9 +366,10 @@ def process_pcap(class_counter, pcap_file_name, pcap_file_path, all_csv_file_pat
                         with open(all_csv_file_path, 'a') as file:
                             file.write(','.join(fields) + '\n')
 
-def original(blacklist_check, blacklist_file_path, feature_names_file_path, protocol_folder_path, split_file_paths,
-        pcap_file_names, pcap_file_paths, classes_file_path, extracted_field_list_file_path,
-        statistical_features_on, tshark_filter, all_csv_file_path, batch_file_paths, num_of_batches, num_cores):
+def original(blacklist_check, blacklist_file_path, feature_names_file_path, protocol_folder_path,
+             original_split_file_paths, pcap_file_names, pcap_file_paths, classes_file_path,
+             original_extracted_field_list_file_path, statistical_features_on, tshark_filter, all_csv_file_path,
+             original_batch_file_paths, num_of_batches, num_cores):
 
     # Create protocol folder if it doesn't exist
     if not os.path.exists(protocol_folder_path):
@@ -353,19 +413,19 @@ def original(blacklist_check, blacklist_file_path, feature_names_file_path, prot
             add_stat_features_to_csv_file(all_csv_file_path)
 
     # Check if split files exist; if not, create them
-    if not all(os.path.exists(file_path) for file_path in split_file_paths):
+    if not all(os.path.exists(file_path) for file_path in original_split_file_paths):
         print("creating the split files...")
-        split_csv(all_csv_file_path, split_file_paths)
+        split_csv(all_csv_file_path, original_split_file_paths)
 
     # Create batch files
-    if not all(os.path.exists(file_path) for file_path in batch_file_paths[0]) or not all(os.path.exists(file_path) for file_path in batch_file_paths[1]):
+    if not all(os.path.exists(file_path) for file_path in original_batch_file_paths[0]) or not all(os.path.exists(file_path) for file_path in original_batch_file_paths[1]):
         print("creating the batch files...")
-        create_batch_files(num_of_batches, split_file_paths, batch_file_paths)
+        create_batch_files(num_of_batches, original_split_file_paths, original_batch_file_paths)
 
     # Write extracted field list to files if they don't exist
-    if not os.path.exists(extracted_field_list_file_path):
+    if not os.path.exists(original_extracted_field_list_file_path):
         print("generating feature sets...")
-        write_extracted_field_list_to_file(all_csv_file_path, extracted_field_list_file_path)
+        write_extracted_field_list_to_file(all_csv_file_path, original_extracted_field_list_file_path)
 
     # Write classes JSON file if it doesn't exist
     if not os.path.exists(classes_file_path):
@@ -375,8 +435,9 @@ def original(blacklist_check, blacklist_file_path, feature_names_file_path, prot
         with open(classes_file_path, 'w', encoding='utf-8') as json_file:
             json_file.write(json_data)
 
-def shap(protocol_folder_path, split_file_paths, extracted_field_list_file_path, all_csv_file_path, shap_csv_file_path,
-         shap_fold_size, batch_file_paths, num_of_batches):
+def shap(protocol_folder_path, original_split_file_paths, original_shap_split_file_paths, all_csv_file_path,
+         original_shap_batch_file_paths, num_of_batches, original_shap_extracted_field_list_file_path,
+         shap_all_csv_files):
 
     # Check if the protocol folder exists
     if not os.path.exists(protocol_folder_path):
@@ -388,21 +449,46 @@ def shap(protocol_folder_path, split_file_paths, extracted_field_list_file_path,
         print("The main CSV file does not exist.")
         sys.exit(1)
 
-    # Run SHAP feature extraction if enabled
-    if not os.path.exists(shap_csv_file_path):
-        print("running the SHAP feature extraction...")
-        shap_features.run(all_csv_file_path, shap_csv_file_path, protocol_folder_path, shap_fold_size)
+    # Check if original split files exist; if not, exit
+    if not all(os.path.exists(file_path) for file_path in original_split_file_paths):
+        print("The original split files do not exist. Please run the original processing first.")
+        sys.exit(1)
 
-    # Check if split files exist; if not, create them
-    if not all(os.path.exists(file_path) for file_path in split_file_paths):
-        print("generating the SHAP split files...")
-        split_csv(shap_csv_file_path, split_file_paths)
+    print("running SHAP...")
 
-    # Create batch files
-    if not all(os.path.exists(file_path) for file_path in batch_file_paths[0]) or not all(os.path.exists(file_path) for file_path in batch_file_paths[1]):
-        print("creating the SHAP batch files...")
-        create_batch_files(num_of_batches, split_file_paths, batch_file_paths)
+    # Iterate through each batch
+    for i in range(num_of_batches):
+        test_file = original_split_file_paths[i]
+        train_files = [file_path for j, file_path in enumerate(original_split_file_paths) if j != i]
 
-    # Write extracted field list to files if they don't exist
-    if not os.path.exists(extracted_field_list_file_path):
-        write_extracted_field_list_to_file(shap_csv_file_path, extracted_field_list_file_path)
+        # Check if the test file exists
+        if not os.path.exists(test_file):
+            print(f"Test file {test_file} does not exist. Please run the original processing first.")
+            sys.exit(1)
+
+        # Check if the train files exist
+        for train_file in train_files:
+            if not os.path.exists(train_file):
+                print(f"Train file {train_file} does not exist. Please run the original processing first.")
+                sys.exit(1)
+
+        selected_features_1 = shap_features.run(train_files[0], train_files[1], protocol_folder_path)
+        selected_features_2 = shap_features.run(train_files[1], train_files[0], protocol_folder_path)
+        selected_features_union = set(selected_features_1).union(set(selected_features_2))
+
+        # Write the selected features to the shap CSV file
+        with open(original_shap_extracted_field_list_file_path[i], 'w') as shap_file:
+            for feature in selected_features_union:
+                shap_file.write(f"{feature}\n")
+
+        # split and save to original_shap_split_file_paths
+        keep_selected_features_from_csv_file(all_csv_file_path, shap_all_csv_files[i], selected_features_union)
+
+        # Replace the original split file with the shap split file
+        split_csv(shap_all_csv_files[i], original_shap_split_file_paths[i])
+
+    print(f"creating batch files...")
+
+    # Create batch files for SHAP
+    for i in range(num_of_batches):
+        create_batch_files_shap(num_of_batches, original_shap_split_file_paths, original_shap_batch_file_paths)
