@@ -241,6 +241,7 @@ if __name__ == '__main__':
             )
         print("done...")
     elif mode == 'ga' or mode == 'aco' or mode == 'abc':
+        # Iterate through each batch
         for batch_number, order_of_batch in enumerate(order_of_batches):
             log_file_path = (
                 folder + "/" + protocol + "/" + "original" +
@@ -253,8 +254,9 @@ if __name__ == '__main__':
                 "_run_" + str(run_number) + ".txt"
             )
 
+            # Remove previous log file, if exists
             if os.path.exists(log_file_path):
-                os.remove(log_file_path)  # Remove previous log file
+                os.remove(log_file_path)
 
             optimization_train_file_path = original_batch_file_paths[0][batch_number] if not shap_features_on else original_shap_batch_file_paths[0][batch_number]
             optimization_test_file_path = original_batch_file_paths[1][batch_number] if not shap_features_on else original_shap_batch_file_paths[1][batch_number]
@@ -314,12 +316,19 @@ if __name__ == '__main__':
                 columns_to_keep
             )
 
-            # Filter the original dataset to keep only the selected features for test data
+            # Filter the original dataset to keep only the selected features
             libraries.filter_columns(
                 f'{folder}/{protocol}/original{("_shap" if shap_features_on else "")}_dataset_batch_{batch_number+1}_test.csv',
                 f'{folder}/{protocol}/original{("_shap" if shap_features_on else "")}_{mode}_dataset_batch_{batch_number+1}_test.csv',
                 columns_to_keep
             )
+
+            for batch_number_temp in range(num_of_batches):
+                libraries.filter_columns(
+                    f'{folder}/{protocol}/original{("_shap" if shap_features_on else "")}_dataset_batch_{batch_number+1}_split_{batch_number_temp+1}.csv',
+                    f'{folder}/{protocol}/original{("_shap" if shap_features_on else "")}_{mode}_dataset_batch_{batch_number+1}_split_{batch_number_temp+1}.csv',
+                    columns_to_keep
+                )
 
             # Print the selected features
             log("\nSelected features:", log_file_path)

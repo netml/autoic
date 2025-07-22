@@ -72,7 +72,7 @@ def load_csv_and_filter(classes, fitness_function_file_path, n, log_file_path, f
 
                 # Filter and shuffle rows
                 lines = [row for row in csv_reader if row[-1] == str(i)]
-                random.shuffle(lines)
+                # random.shuffle(lines)
 
                 # Determine the number of packets to keep
                 no_of_packets_to_keep = len(lines) if n == 0 else min(n, len(lines))
