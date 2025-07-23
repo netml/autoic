@@ -323,20 +323,15 @@ if __name__ == '__main__':
                 columns_to_keep
             )
 
-            if shap_features_on:
-                for batch_number_temp in range(num_of_batches):
-                    libraries.filter_columns(
-                        f'{folder}/{protocol}/original{("_shap" if shap_features_on else "")}_dataset_batch_{batch_number+1}_split_{batch_number_temp+1}.csv',
-                        f'{folder}/{protocol}/original{("_shap" if shap_features_on else "")}_{mode}_dataset_batch_{batch_number+1}_split_{batch_number_temp+1}.csv',
-                        columns_to_keep
-                    )
-            else:
-                for batch_number_temp in range(num_of_batches):
-                    libraries.filter_columns(
-                        f'{folder}/{protocol}/original_dataset_split_{batch_number_temp+1}.csv',
-                        f'{folder}/{protocol}/original_{mode}_dataset_split_{batch_number_temp+1}.csv',
-                        columns_to_keep
-                    )
+            for batch_number_temp in range(num_of_batches):
+                if shap_features_on:
+                    input_file = f'{folder}/{protocol}/original_shap_dataset_batch_{batch_number + 1}_split_{batch_number_temp + 1}.csv'
+                    output_file = f'{folder}/{protocol}/original_shap_{mode}_dataset_batch_{batch_number + 1}_split_{batch_number_temp + 1}.csv'
+                else:
+                    input_file = f'{folder}/{protocol}/original_dataset_split_{batch_number_temp + 1}.csv'
+                    output_file = f'{folder}/{protocol}/original_{mode}_dataset_batch_{batch_number + 1}_split_{batch_number_temp + 1}.csv'
+
+                libraries.filter_columns(input_file, output_file, columns_to_keep)
 
             # Print the selected features
             log("\nSelected features:", log_file_path)
